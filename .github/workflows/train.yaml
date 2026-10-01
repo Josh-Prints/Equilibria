@@ -1,0 +1,47 @@
+name: train
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Stop after this many minutes (max 340)'
+        default: '330'
+      pairs:
+        description: 'Pairs per generation'
+        default: '16'
+      scenarios:
+        description: 'Scenarios per candidate'
+        default: '3'
+      sigma:
+        description: 'Noise size'
+        default: '0.01'
+      lr:
+        description: 'Step size'
+        default: '0.004'
+      resume:
+        description: 'Resume from resume.json in the repo (true/false)'
+        default: 'false'
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install planck@1.0.0
+      - run: node train.js
+        env:
+          MINUTES: ${{ inputs.minutes }}
+          PAIRS: ${{ inputs.pairs }}
+          SCENARIOS: ${{ inputs.scenarios }}
+          SIGMA: ${{ inputs.sigma }}
+          LR: ${{ inputs.lr }}
+          RESUME: ${{ inputs.resume }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ragdoll-policy
+          path: out/
