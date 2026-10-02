@@ -261,3 +261,12 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - A held gun keeps its aim (`g.aim`, angular velocity steered in `applyDrag`) instead of flopping on the grab point.
 - Guns flip (`g.s`, `gunFix`) so they stay grip-down when pointing left.
 - `#bFire` (round amber button, right side) appears when any gun exists and fires the last gun touched.
+
+## v0.2.13 — Gunshot reactions
+- Fire button removed (two-finger aim and lift-to-fire stays).
+- Bullet holes: `r.holeK[k]` (local points per part) drawn by `drawHoles` as a dark puncture with a red rim, clipped to the part.
+- `RS.shot(rig,k,lx,ly,dx)` (sim.js) starts a reaction, run by `shotReact` (takes over from balance/get-up) and `shotArms` (after the other reflexes):
+  - `fall` (head/torso/arms/legs): knocked back (page impulses chest and pelvis along the shot), knees buckle, doubles over, topples the way it was pushed, lies there ~8 s clutching the wound (hands pulled to it by impulses, arms soft). The other hand clutches when an arm is hit.
+  - `hop` (foot): lifts the foot, hops on the other leg for 4.5 s with an upright assist; falling over turns into a short cower.
+  - `hand`: stays up, hunched, the shot hand pulled to the chest and the other hand on it for 5 s.
+- Gunshots no longer knock it out straight away: smaller pain spikes (0.35 body, 0.25 hand/foot) and a short `wakeT` grace. Torso shots don't break the spine; hand/foot shots don't break bones and bleed less.

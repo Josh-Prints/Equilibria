@@ -796,6 +796,76 @@ var RS=(function(){
     if(I.broken[1]||I.broken[2])[6,7,8,12,13,14].forEach(function(q){limp1(rig,q);});
   }
 
+  // SHOT (the page's handgun calls shot()): how a hit person reacts for a few seconds.
+  //  'fall': legs buckle, the body curls toward the wound and the hands go to it (the other hand when an arm is hit),
+  //          and it keeps holding it while it's down. 'hop': shot in the foot, it lifts that foot and hops on the other.
+  //  'hand': shot in the hand, it stays up, hunches and clutches that hand to its chest with the other one.
+  // The hands are pulled to the wound by small impulses (equal and opposite on the wounded part), arms gone soft.
+  function shot(rig,k,lx,ly,dx){
+    var b=k-4,kind=k>=4&&b%6===2?'hand':k>=4&&b%6===5?'hop':'fall';
+    var T=kind==='fall'?8:kind==='hop'?4.5:5;
+    if(rig.shot&&rig.shot.kind==='fall'&&kind!=='fall')kind='fall'; // already going down: keep going down
+    rig.shot={k:k,lx:lx,ly:ly,t:0,T:kind==='fall'?Math.max(T,rig.shot&&rig.shot.kind==='fall'?rig.shot.T-rig.shot.t:0):T,kind:kind,hp:0,dx:dx||0};
+    rig.wakeT=Math.max(rig.wakeT||0,kind==='fall'?2.5:4); // a moment of adrenaline before the pain can knock it out
+    rig.cowT=0;rig.gu.ph=-1;
+  }
+  function pullHand(rig,h,w,K,dt){ // impulse the hand toward a world point; the opposite impulse goes into the wounded part
+    var hb=rig.bodies[h],ab=rig.bodies[h-1];if(!hb||!K)return;
+    var p=hb.getPosition(),v=hb.getLinearVelocity(),m=hb.getMass()+ab.getMass();
+    var vx=Math.max(-3,Math.min(3,(w.x-p.x)*9)),vy=Math.max(-3,Math.min(3,(w.y-p.y)*9));
+    var ix=m*(vx-v.x)*0.35,iy=m*(vy-v.y)*0.35;
+    hb.applyLinearImpulse(Vec2(ix,iy),p,true);K.applyLinearImpulse(Vec2(-ix*0.5,-iy*0.5),w,true);
+  }
+  function softArm(rig,s,v){[3,4,5].forEach(function(q){q+=s;rig.rs[q]=rig.stiff[q]=v;var a=rig.ctrls[q].j.getJointAngle();rig.tgt[q]=a;});}
+  function shotReact(rig,tt,dt){ // runs instead of balance/get-up while it's taking over the legs ('fall', 'hop')
+    var S=rig.shot;if(!S)return false;
+    S.t+=dt;if(S.t>=S.T||rig.inj&&rig.inj.gone[S.k>=4?S.k-1:Math.min(S.k,2)]&&S.k!==3){if(S.kind==='fall')rig.age=0;rig.shot=null;return false;}
+    var k,ps=rig.bodies,fade=Math.min(1,(S.T-S.t)/0.8);
+    if(S.kind==='fall'){
+      var down=ps[3].getPosition().y<0.5||ps[1].getPosition().y<0.5,w=Math.min(1,S.t/0.25);
+      if(down&&!S.dn){S.dn=S.t;var sg=S.dx<0?-1:1;[0,1,2].forEach(function(q){var v=ps[q].getLinearVelocity();ps[q].setLinearVelocity(Vec2(v.x+1.4*sg,v.y));});} // on its knees: topples over the way the shot pushed it
+      var L=down?{6:0.45,7:-0.7,8:0.2,12:0.3,13:-0.5,14:0.2}:{6:0.9,7:-1.5,8:0.3,12:0.7,13:-1.3,14:0.3}; // knees give way, then lies there, legs drawn up a bit
+      for(k in L){tt[k]+=(L[k]-tt[k])*w;rig.rs[k]=rig.stiff[k]=down?0.2:0.18;}
+      var cu=down?-0.12:-0.35;tt[1]+=(cu-tt[1])*w;tt[2]+=(cu-tt[2])*w;tt[0]+=(-0.3-tt[0])*w; // doubled over toward the wound, chin down; flatter once it's down
+      for(k=0;k<3;k++){rig.rs[k]=rig.stiff[k]=down?0.25:0.45;}
+      if(down&&Math.random()<dt*2)tt[1]+=(Math.random()-0.5)*0.5; // writhing
+      return true;
+    }
+    if(S.kind==='hop'){
+      var far=S.k<10,up=far?[6,7,8]:[12,13,14],st=far?[12,13,14]:[6,7,8],P=ps[3],C=ps[1],ft=ps[far?15:9];
+      if(P.getPosition().y<0.6){rig.shot=null;rig.cowT=2;rig.cowA=0;return false;} // fell over: curl up instead
+      var ph=(S.t*2.2)%1,crouch=ph<0.3;
+      tt[up[0]]=0.9;tt[up[1]]=-1.7;tt[up[2]]=0.4;
+      tt[st[0]]=crouch?0.35:0.05;tt[st[1]]=crouch?-0.6:-0.05;tt[st[2]]=crouch?0.25:0;
+      for(k=0;k<3;k++){rig.rs[up[k]]=rig.stiff[up[k]]=0.8;rig.rs[st[k]]=rig.stiff[st[k]]=1;tt[k]=k?0:-0.15;rig.rs[k]=rig.stiff[k]=0.9;}
+      tt[3]=tt[9]=0.6;tt[4]=tt[10]=0.6;
+      // stay over the standing foot and upright (this is the hand of god part: one-leg balance isn't trained)
+      [P,C].forEach(function(b){var a=wrap(b.getAngle()),av=b.getAngularVelocity();b.setAngularVelocity(av+(-9*a-av)*0.3*fade);});
+      var fx=ft.getPosition().x,pv=P.getLinearVelocity(),ex=(fx-P.getPosition().x)*4-pv.x;P.setLinearVelocity(Vec2(pv.x+ex*0.12*fade,pv.y));
+      if(!crouch&&!S.hp&&onGround(ft)){S.hp=1;ps.forEach(function(b){var v=b.getLinearVelocity();b.setLinearVelocity(Vec2(v.x,v.y+1.1));});}
+      if(crouch)S.hp=0;
+      return true;
+    }
+    return false;
+  }
+  function shotArms(rig,tt,dt){ // after everything else: the hands go to the wound
+    var S=rig.shot;if(!S||S.t>=S.T)return;
+    var ps=rig.bodies,K=ps[S.k];if(!K)return;
+    var w=K.getWorldPoint(Vec2(S.lx,S.ly)),fade=Math.min(1,(S.T-S.t)/0.8);
+    if(S.kind==='hand'){
+      var far=S.k<10,oh=far?12:6,c=ps[1].getWorldPoint(Vec2(0.09*(rig.dir||1),0.02));
+      softArm(rig,far?0:6,0.06);softArm(rig,far?6:0,0.06);
+      tt[1]+=-0.12;tt[2]+=-0.08;tt[0]+=-0.25;
+      if(ps[0].getPosition().y>1.2)[ps[1],ps[3]].forEach(function(b){var a=wrap(b.getAngle()),av=b.getAngularVelocity();b.setAngularVelocity(av+(-6*a-av)*0.12*fade);}); // stays on its feet
+      pullHand(rig,S.k,c,ps[1],dt*fade);pullHand(rig,oh,w,K,dt*fade);
+      return;
+    }
+    if(S.kind==='hop')return;
+    var arm=S.k>=4&&S.k<10?'far':S.k>=10?'near':'';
+    if(arm!=='far'){softArm(rig,0,0.05);pullHand(rig,6,w,K,dt*fade);}
+    if(arm!=='near'){softArm(rig,6,0.05);pullHand(rig,12,w,K,dt*fade);}
+  }
+
   // PROTECT HEAD (FLAGS.protect): while falling toward the ground (detector says falling, or it's in the air), with the
   // head coming down, bring the forearms up around the head and tuck the chin; held a moment after it lands.
   // falling forward: forearms up in front of the face (a guard); otherwise: hands behind the head
@@ -870,13 +940,15 @@ var RS=(function(){
     rig.ko=false;
     // coming round after being out: muscles come back slowly (weak and floppy at first), no getting up until halfway
     var gw=1;if(rig.groggy>0){rig.groggy-=dt;var gx=Math.max(0,1-rig.groggy/FLAGS.groggyT);gw=0.03+0.97*gx*gx;}
-    var cowering=rf&&(FLAGS.cower||hurt(rig))&&cower(rig,tt,dt);rig.cowering=!!cowering;
+    var shotT=shotReact(rig,tt,dt);
+    var cowering=!shotT&&!(rig.shot&&rig.shot.kind==='hand')&&rf&&(FLAGS.cower||hurt(rig))&&cower(rig,tt,dt);rig.cowering=!!cowering||shotT;cowering=cowering||shotT;
     var gettingUp=!cowering&&rf&&FLAGS.getup&&gw>0.3&&getUp(rig,tt,dt);
     guLimits(rig,!!gettingUp);
     rig.b2ok=!cowering&&!gettingUp&&rf&&FLAGS.bal2?bal2(rig,tt,out,ca,dt):false;
     if(!cowering&&!gettingUp&&rf&&!FLAGS.bal2&&FLAGS.step)stepReflex(rig,tt,ca,dt);
     if(!cowering&&!gettingUp&&rf&&FLAGS.nn)nnReact(rig,tt,dt);
     if(!cowering&&!gettingUp&&rf&&FLAGS.protect)protectHead(rig,tt,dt);
+    shotArms(rig,tt,dt);
     // target smoothing: the network can slow it down (smoother) or speed it up; soft start eases in after spawning
     var al=clampA(FILT*(1+0.6*out[O_FILT]),1);
     if(rig.age<FLAGS.softT){var x=rig.age/FLAGS.softT;al*=0.04+0.96*x*x*(3-2*x);}
@@ -1021,7 +1093,7 @@ var RS=(function(){
     return {mean:sum/all.length,best:best};
   }
 
-  return {JNAMES:JNAMES,breakBone:breakBone,sever:sever,shatter:shatter,hurt:hurt,DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},GU:GU,FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
+  return {JNAMES:JNAMES,shot:shot,breakBone:breakBone,sever:sever,shatter:shatter,hurt:hurt,DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},GU:GU,FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
     esNoise:esNoise,esStep:esStep,migrate:migrate,runEpisode:runEpisode,evalCandidate:evalCandidate,sampleScenario:sampleScenario,fk:fk,
     NP:NP,NI:NI,NO:NO,NJ:NJ,DT:DT,SUB:SUB,POLICY_HZ:POLICY_HZ,VEL_IT:VEL_IT,POS_IT:POS_IT,JT:JT,ORDER:ORDER,CASES:CASES,wrap:wrap};
 })();
