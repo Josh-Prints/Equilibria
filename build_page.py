@@ -20,6 +20,7 @@ button{font:600 15px system-ui,Arial,sans-serif;padding:11px 14px;border:0;borde
 details{background:var(--panel);border-radius:10px;padding:6px 10px;font-size:14px;backdrop-filter:blur(6px)}
 summary{font-weight:600;padding:2px 0}
 label{display:flex;align-items:center;gap:8px;padding:5px 0;white-space:nowrap}
+#iTab{border-collapse:collapse}#iTab td{padding:3px 10px 3px 0}#iTab input{width:22px;height:22px}
 details input[type=checkbox]{width:18px;height:18px;margin:0}
 details input[type=number]{width:54px;font-size:14px;padding:3px}
 .row{display:flex;gap:8px;padding:5px 0;flex-wrap:wrap}
@@ -54,6 +55,23 @@ details button{font-size:14px;padding:8px 12px}
   <input type="file" id="fIn" accept=".json,application/json" style="display:none">
   <div class="row"><button id="pL">&#9664; Push</button><button id="pR">Push &#9654;</button></div>
   <label>Strength <input type="range" id="pS" min="0.1" max="3" step="0.1" value="1" style="width:110px;height:auto"></label>
+</details>
+<details id="injp">
+  <summary>Injuries</summary>
+  <label><input type="checkbox" id="oInj" checked> Bones can break, head hits knock it out</label>
+  <label><input type="checkbox" id="oSever" checked> Limbs come off if pulled hard enough</label>
+  <div class="row"><label><input type="checkbox" id="iKO"> Knocked out</label><label><input type="checkbox" id="iDead"> Dead</label></div>
+  <div style="opacity:.7">Broken bones (tick to break, untick to heal):</div>
+  <div class="row"><label><input type="checkbox" id="iB0"> Neck</label><label><input type="checkbox" id="iB1"> Upper back</label><label><input type="checkbox" id="iB2"> Lower back</label></div>
+  <table id="iTab"><tr><td></td><td>Far</td><td>Near</td></tr>
+    <tr><td>Shoulder</td><td><input type="checkbox" id="iB3"></td><td><input type="checkbox" id="iB9"></td></tr>
+    <tr><td>Elbow</td><td><input type="checkbox" id="iB4"></td><td><input type="checkbox" id="iB10"></td></tr>
+    <tr><td>Wrist</td><td><input type="checkbox" id="iB5"></td><td><input type="checkbox" id="iB11"></td></tr>
+    <tr><td>Hip</td><td><input type="checkbox" id="iB6"></td><td><input type="checkbox" id="iB12"></td></tr>
+    <tr><td>Knee</td><td><input type="checkbox" id="iB7"></td><td><input type="checkbox" id="iB13"></td></tr>
+    <tr><td>Ankle</td><td><input type="checkbox" id="iB8"></td><td><input type="checkbox" id="iB14"></td></tr>
+  </table>
+  <div class="row"><button id="bBreakAll">Break all</button><button id="bHealAll">Heal all</button></div>
 </details>
 <details id="dbg">
   <summary>Debug</summary>
