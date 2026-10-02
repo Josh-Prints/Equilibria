@@ -63,6 +63,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
 #hmenu{border-radius:2px;border:1px solid #3a342a;background:#0f0e0cf2}
 #hmenu button{font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;background:none;border-radius:0;color:#c9c2b4;padding:8px 14px 5px}
 #hmenu button:active{color:#ffb020;filter:none}
+#bFire{position:fixed;z-index:7;right:12px;bottom:calc(132px + env(safe-area-inset-bottom));width:72px;height:72px;border-radius:50%;border:2px solid #ffb020;background:#1a1408e0;color:#ffb020;font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1px;text-transform:uppercase;padding-top:4px;box-shadow:0 0 14px #ffb02040}#bFire[hidden]{display:none}#bFire:active{background:#ffb020;color:#0f0e0c}
 #spmenu{position:fixed;z-index:8;left:8px;bottom:calc(64px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:2px;padding:6px;border:1px solid #3a342a;background:#0f0e0cf2;box-shadow:0 4px 16px #0008}#spmenu[hidden]{display:none}
 #spmenu button{font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;background:none;border-radius:0;color:#c9c2b4;padding:8px 14px 5px;text-align:left}
 #spmenu button:active{color:#ffb020;filter:none}
@@ -175,6 +176,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bIn">+</button>
   <button id="bOut">&minus;</button>
 </div>
+<button id="bFire" hidden>Fire</button>
 <div id="hud"></div>
 <div id="hlist" class="ov gm" hidden>
   <h2 class="gt" data-t="HUMANS">HUMANS</h2>
@@ -206,7 +208,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.11</div>
+  <div class="ver">beta v0.2.12</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -226,7 +228,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.11</div>
+  <div class="ver">beta v0.2.12</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">

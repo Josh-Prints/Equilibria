@@ -255,3 +255,9 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Drag the gun to aim; a quick tap (<350 ms, <12 px) on it calls `fire(g)`: raycast 40 m along the barrel, tracer + muzzle flash, recoil impulse, `bang` sound.
 - Hits push the body, cause pain, and with gore on add entry/exit blood, decals and a wound (`r.hole`) that oozes; `r.holes` adds to bleed rate in sim.js.
 - Headshot kills (unless Gore is None). Other non-pelvis parts break the joint with chance 0.8 Glass / 0.5 Default / 0.35 Realistic.
+
+## v0.2.12 — One-hand-friendly gun controls
+- While one finger holds a gun, a second finger aims it (barrel points at that finger, drag to adjust) and lifting it fires. This replaces the pinch only when the first finger is on a gun.
+- A held gun keeps its aim (`g.aim`, angular velocity steered in `applyDrag`) instead of flopping on the grab point.
+- Guns flip (`g.s`, `gunFix`) so they stay grip-down when pointing left.
+- `#bFire` (round amber button, right side) appears when any gun exists and fires the last gun touched.

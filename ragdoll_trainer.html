@@ -60,6 +60,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
 #hmenu{border-radius:2px;border:1px solid #3a342a;background:#0f0e0cf2}
 #hmenu button{font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;background:none;border-radius:0;color:#c9c2b4;padding:8px 14px 5px}
 #hmenu button:active{color:#ffb020;filter:none}
+#bFire{position:fixed;z-index:7;right:12px;bottom:calc(132px + env(safe-area-inset-bottom));width:72px;height:72px;border-radius:50%;border:2px solid #ffb020;background:#1a1408e0;color:#ffb020;font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1px;text-transform:uppercase;padding-top:4px;box-shadow:0 0 14px #ffb02040}#bFire[hidden]{display:none}#bFire:active{background:#ffb020;color:#0f0e0c}
 #spmenu{position:fixed;z-index:8;left:8px;bottom:calc(64px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:2px;padding:6px;border:1px solid #3a342a;background:#0f0e0cf2;box-shadow:0 4px 16px #0008}#spmenu[hidden]{display:none}
 #spmenu button{font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;background:none;border-radius:0;color:#c9c2b4;padding:8px 14px 5px;text-align:left}
 #spmenu button:active{color:#ffb020;filter:none}
@@ -172,6 +173,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bIn">+</button>
   <button id="bOut">&minus;</button>
 </div>
+<button id="bFire" hidden>Fire</button>
 <div id="hud"></div>
 <div id="hlist" class="ov gm" hidden>
   <h2 class="gt" data-t="HUMANS">HUMANS</h2>
@@ -203,7 +205,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.11</div>
+  <div class="ver">beta v0.2.12</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -223,7 +225,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.11</div>
+  <div class="ver">beta v0.2.12</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1446,7 +1448,7 @@ var RS=(function(){
   // =====================================================================
   function init(){
     world=new planck.World({gravity:Vec2(0,-10)});
-    drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;camFollow=null;items=[];fx=[];
+    drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;camFollow=null;items=[];fx=[];lastGun=null;trig=null;showFire();
     ground=world.createBody();ground.createFixture(Box(1000,1,Vec2(0,-1),0),{friction:0.9});
     spawn('stand');
   }
@@ -1455,10 +1457,21 @@ var RS=(function(){
   var items=[],fx=[];
   function spawnGun(){
     var b=world.createBody({type:'dynamic',position:Vec2(cam.x,Math.max(0.6,cam.y+0.3)),angle:0,bullet:true});
-    b.createFixture(Box(0.09,0.02,Vec2(0.015,0.012),0),{density:2.2,friction:0.6,restitution:0.1}); // slide and barrel
-    b.createFixture(Box(0.02,0.042,Vec2(-0.045,-0.03),-0.25),{density:2.2,friction:0.8,restitution:0.1}); // grip
-    b.createFixture(Box(0.012,0.006,Vec2(-0.008,-0.014),0),{density:1,friction:0.6}); // trigger guard
-    b.setUserData({gun:true});items.push({type:'gun',b:b,flash:0});
+    var g={type:'gun',b:b,flash:0,s:1};gunFix(g);b.setUserData({gun:true});items.push(g);lastGun=g;showFire();
+  }
+  function gunFix(g){ // s=1 grip down when pointing right, s=-1 mirrored so it stays grip-down pointing left
+    var b=g.b,s=g.s,f;while((f=b.getFixtureList()))b.destroyFixture(f);
+    b.createFixture(Box(0.09,0.02,Vec2(0.015,0.012*s),0),{density:2.2,friction:0.6,restitution:0.1}); // slide and barrel
+    b.createFixture(Box(0.02,0.042,Vec2(-0.045,-0.03*s),-0.25*s),{density:2.2,friction:0.8,restitution:0.1}); // grip
+    b.createFixture(Box(0.012,0.006,Vec2(-0.008,-0.014*s),0),{density:1,friction:0.6}); // trigger guard
+  }
+  function gunOf(b){for(var i=0;i<items.length;i++)if(items[i].b===b)return items[i];return null;}
+  var lastGun=null;
+  function showFire(){$('bFire').hidden=!items.length;}
+  function aimAt(g,w){ // point the barrel at a world point, flipping the gun over when it swings past vertical
+    var p=g.b.getPosition(),a=Math.atan2(w.y-p.y,w.x-p.x),s=Math.cos(a)<0?-1:1;
+    if(s!==g.s){g.s=s;gunFix(g);}
+    g.aim=a;
   }
   function partHit(b){ // which human (and which part index, chunks after the body list) a body belongs to
     for(var i=0;i<rigs.length;i++){var r=rigs[i],k=r.bodies.indexOf(b);if(k>=0)return {r:r,k:k};
@@ -1466,7 +1479,7 @@ var RS=(function(){
     return null;
   }
   function fire(g){
-    var b=g.b,mz=b.getWorldPoint(Vec2(0.11,0.012)),d=b.getWorldVector(Vec2(1,0)),end=Vec2(mz.x+d.x*40,mz.y+d.y*40),best=null;
+    var b=g.b,mz=b.getWorldPoint(Vec2(0.11,0.012*g.s)),d=b.getWorldVector(Vec2(1,0)),end=Vec2(mz.x+d.x*40,mz.y+d.y*40),best=null;
     world.rayCast(mz,end,function(f,pt,n,fr){if(f.getBody()===b)return -1;best={f:f,p:Vec2(pt.x,pt.y),n:Vec2(n.x,n.y),fr:fr};return fr;});
     var hp=best?best.p:end;
     fx.push({t:'tracer',a:Vec2(mz.x,mz.y),b:hp,life:0.09},{t:'flash',p:Vec2(mz.x,mz.y),d:Vec2(d.x,d.y),life:0.06});
@@ -1493,7 +1506,7 @@ var RS=(function(){
       var b=g.b;ctx.beginPath();
       for(var f=b.getFixtureList();f;f=f.getNext()){var vs=f.getShape().m_vertices;for(var i=0;i<vs.length;i++){var q=toScreen(b.getWorldPoint(vs[i]));if(i)ctx.lineTo(q.x,q.y);else ctx.moveTo(q.x,q.y);}ctx.closePath();}
       ctx.fillStyle='#4a4741';ctx.fill();ctx.strokeStyle='#14120f';ctx.lineWidth=Math.max(1,0.006*cam.z);ctx.stroke();
-      var s1=toScreen(b.getWorldPoint(Vec2(-0.07,0.028))),s2=toScreen(b.getWorldPoint(Vec2(0.1,0.028))); // slide highlight
+      var s1=toScreen(b.getWorldPoint(Vec2(-0.07,0.028*g.s))),s2=toScreen(b.getWorldPoint(Vec2(0.1,0.028*g.s))); // slide highlight
       ctx.strokeStyle='rgba(255,176,32,0.35)';ctx.lineWidth=Math.max(1,0.004*cam.z);ctx.beginPath();ctx.moveTo(s1.x,s1.y);ctx.lineTo(s2.x,s2.y);ctx.stroke();
     });
     for(var i=fx.length-1;i>=0;i--){var e=fx[i];
@@ -1556,6 +1569,7 @@ var RS=(function(){
     var mag=Math.sqrt(ax*ax+ay*ay);if(mag>80){ax*=80/mag;ay*=80/mag;}
     var m=Math.max(drag.mass,b.getMass());
     b.applyForce(Vec2(ax*m,ay*m),wp,true);
+    var g=gunOf(b);if(g){var e=g.aim-b.getAngle();e=Math.atan2(Math.sin(e),Math.cos(e));b.setAngularVelocity(30*e);}
   }
 
   var ptrs={},mode='none',pan=null,pinch=null;
@@ -1567,18 +1581,20 @@ var RS=(function(){
     pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,z:cam.z,w:toWorld(mx,my)};
     mode='pinch';drag=null;
   }
-  var holdT=0,tap=null;
+  var holdT=0,tap=null,trig=null;
   cv.addEventListener('pointerdown',function(e){
     camT=null;
     e.preventDefault();
     try{cv.setPointerCapture(e.pointerId);}catch(_){}
     ptrs[e.pointerId]=pos(e);
+    if(ids().length>=2&&mode==='drag'&&drag&&gunOf(drag.body)&&!trig){var tg=gunOf(drag.body);trig={id:e.pointerId,g:tg};clearTimeout(holdT);tap=null;aimAt(tg,toWorld(ptrs[e.pointerId].x,ptrs[e.pointerId].y));return;}
     if(ids().length>=2){startPinch();return;}
     var p=ptrs[e.pointerId],h=pick(p.x,p.y);
     if(h){
       var wp=toWorld(h.sx,h.sy);
       drag={body:h.b,local:h.b.getLocalPoint(wp),target:toWorld(p.x,p.y),mass:islandMass(h.b)};
       mode='drag';tap={id:e.pointerId,t:performance.now(),x:p.x,y:p.y,b:h.b};
+      var hg=gunOf(h.b);if(hg){lastGun=hg;hg.aim=h.b.getAngle();var hs=Math.cos(hg.aim)<0?-1:1;if(hs!==hg.s){hg.s=hs;gunFix(hg);}}
       var r0=rigOf(h.b),p0={x:p.x,y:p.y};clearTimeout(holdT);
       holdT=setTimeout(function(){var q=ptrs[e.pointerId];if(r0&&mode==='drag'&&q&&Math.hypot(q.x-p0.x,q.y-p0.y)<10){drag=null;mode='none';openMenu(r0,q);}},600);
     }else{mode='pan';pan={x:p.x,y:p.y};camFollow=null;}
@@ -1592,11 +1608,13 @@ var RS=(function(){
       var mx=(a.x+b.x)/2,my=(a.y+b.y)/2,d=Math.hypot(a.x-b.x,a.y-b.y)||1;
       cam.z=Math.max(15,Math.min(600,pinch.z*d/pinch.d));
       cam.x=pinch.w.x-(mx-W/2)/cam.z;cam.y=pinch.w.y+(my-H/2)/cam.z;
-    }else if(mode==='drag'&&drag){drag.target=toWorld(p.x,p.y);}
+    }else if(trig&&trig.id===e.pointerId){aimAt(trig.g,toWorld(p.x,p.y));}
+    else if(mode==='drag'&&drag){drag.target=toWorld(p.x,p.y);}
     else if(mode==='pan'&&pan){cam.x-=(p.x-pan.x)/cam.z;cam.y+=(p.y-pan.y)/cam.z;pan={x:p.x,y:p.y};}
   });
   function up(e){
     clearTimeout(holdT);
+    if(trig&&trig.id===e.pointerId){var tq=ptrs[e.pointerId],tg=trig.g;if(tq)aimAt(tg,toWorld(tq.x,tq.y));tg.b.setTransform(tg.b.getPosition(),tg.aim);tg.b.setAngularVelocity(0);fire(tg);trig=null;delete ptrs[e.pointerId];return;}
     if(tap&&tap.id===e.pointerId){var q=ptrs[e.pointerId];
       if(q&&performance.now()-tap.t<350&&Math.hypot(q.x-tap.x,q.y-tap.y)<12)items.forEach(function(g){if(g.b===tap.b)fire(g);});tap=null;}
     delete ptrs[e.pointerId];
@@ -1614,6 +1632,7 @@ var RS=(function(){
   document.getElementById('bSpawn').onclick=function(){var m=$('spmenu');m.hidden=!m.hidden;};
   document.getElementById('spHuman').onclick=function(){$('spmenu').hidden=true;spawn('stand');};
   document.getElementById('spGun').onclick=function(){$('spmenu').hidden=true;spawnGun();};
+  $('bFire').addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();if(lastGun&&items.indexOf(lastGun)>=0)fire(lastGun);else if(items.length)fire(items[items.length-1]);});
   document.getElementById('bReset').onclick=document.getElementById('bReset2').onclick=function(){init();pauseMenu(false);};
   var userPaused=false,MAXR=Infinity; // no cap on people
   function setOn(id,on){document.getElementById(id).classList.toggle('on',!!on);}
