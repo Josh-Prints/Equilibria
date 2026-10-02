@@ -32,6 +32,7 @@ details button{font-size:14px;padding:8px 12px}
 <body>
 <canvas id="c"></canvas>
 <div id="panels">
+<div hidden><!-- training, policy and behaviour switches: off the page; behaviours stay on (checked) -->
 <details id="trn" open>
   <summary>Train (evolution strategies)</summary>
   <div class="row"><button id="bTrain">Start training</button><button id="bResetP">Reset policy</button><button id="bTest">Test</button></div>
@@ -48,13 +49,11 @@ details button{font-size:14px;padding:8px 12px}
   <label><input type="checkbox" id="oReflex" checked> Balance reflex</label>
   <label><input type="checkbox" id="oBal2" checked> New balance + recovery steps</label>
   <label><input type="checkbox" id="oStep" checked> Old step reflex (if New balance off)</label>
-  <label><input type="checkbox" id="oFall"> Fall &amp; landing reflex (experimental)</label>
+  <label><input type="checkbox" id="oFall" checked> Fall &amp; landing reflex (experimental)</label>
   <label><input type="checkbox" id="oSmooth" checked> Train for smooth, human-like motion</label>
   <label><input type="checkbox" id="oSoft" checked> Soft start: ease into standing</label>
   <div class="row"><button id="bSave">Save file</button><button id="bLoad">Load file</button></div>
   <input type="file" id="fIn" accept=".json,application/json" style="display:none">
-  <div class="row"><button id="pL">&#9664; Push</button><button id="pR">Push &#9654;</button></div>
-  <label>Strength <input type="range" id="pS" min="0.1" max="3" step="0.1" value="1" style="width:110px;height:auto"></label>
 </details>
 <details id="injp">
   <summary>Injuries</summary>
@@ -73,8 +72,11 @@ details button{font-size:14px;padding:8px 12px}
   </table>
   <div class="row"><button id="bBreakAll">Break all</button><button id="bHealAll">Heal all</button></div>
 </details>
+</div>
 <details id="dbg">
   <summary>Debug</summary>
+  <div class="row"><button id="pL">&#9664; Push</button><button id="pR">Push &#9654;</button></div>
+  <label>Strength <input type="range" id="pS" min="0.1" max="3" step="0.1" value="1" style="width:110px;height:auto"></label>
   <label><input type="checkbox" id="oBox" checked> Boxes</label>
   <label><input type="checkbox" id="oSkel"> Skeleton</label>
   <label><input type="checkbox" id="oJoint"> Joints</label>
