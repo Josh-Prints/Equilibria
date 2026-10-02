@@ -66,6 +66,9 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
 #rename.gm{align-items:flex-start!important}#rename .gt{font-size:clamp(34px,10vw,52px)}#rename .row{gap:16px}
 #rename .row button{all:unset;cursor:pointer;font:500 30px/1.1 Teko,system-ui,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#a9a397}#rename .row button:active{color:#ffb020}
 #rnIn{font:400 18px 'Share Tech Mono',monospace;border-radius:0;background:#14120f;color:#ffb020;border:1px solid #3a342a;outline:none}
+#hlist{z-index:9}#hlc{display:flex;flex-direction:column;gap:5px;width:300px;max-width:82vw;max-height:58vh;overflow-y:auto;font:400 13px 'Share Tech Mono',monospace;-webkit-overflow-scrolling:touch}
+#hlc .hc{padding:7px 10px;cursor:pointer}
+.hdd{font-size:13px}.hdd .dda{color:#ffb020;margin-left:4px}
 /* glitchy dark menus (main, pause, settings): CRT scanlines, film noise, chromatic split title, flicker */
 .gm{background:radial-gradient(ellipse at 30% 40%,#16130f 0%,#070707 55%,#000 100%)!important;backdrop-filter:none!important;align-items:flex-start!important;justify-content:center!important;text-align:left!important;
   padding:24px 24px 24px max(28px,10vw)!important;gap:8px!important;font-family:Teko,'Share Tech Mono',system-ui,sans-serif;color:#e9e4d8;overflow:hidden;animation:gmShake 7s infinite steps(1)}
@@ -77,7 +80,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   box-shadow:inset 0 0 120px 30px #000;animation:gmFlick 5s infinite}
 .gm>*{position:relative;z-index:1}.gm>.ver{position:absolute}
 .gm .gt{margin:0;font:600 clamp(54px,17vw,92px)/0.85 Teko,system-ui,sans-serif;letter-spacing:5px;color:#f2ede1;text-shadow:0 0 18px #ffb02033}
-#pmenu .gt,#smenu .gt{font-size:clamp(46px,13vw,70px)}
+#pmenu .gt,#smenu .gt,#hlist .gt{font-size:clamp(46px,13vw,70px)}
 .gt::before,.gt::after{content:attr(data-t);position:absolute;left:0;top:0;width:100%;overflow:hidden;pointer-events:none}
 .gt::before{color:#ff2a1f;mix-blend-mode:screen;transform:translate(-2px,0);clip-path:inset(0 0 60% 0);animation:gmT1 2.6s infinite steps(1)}
 .gt::after{color:#19e6ff;mix-blend-mode:screen;transform:translate(2px,0);clip-path:inset(55% 0 0 0);animation:gmT2 3.1s infinite steps(1)}
@@ -170,6 +173,11 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bOut">&minus;</button>
 </div>
 <div id="hud"></div>
+<div id="hlist" class="ov gm" hidden>
+  <h2 class="gt" data-t="HUMANS">HUMANS</h2>
+  <div id="hlc"></div>
+  <nav><button id="hlClose">Close</button></nav>
+</div>
 <div id="hmenu" hidden>
   <button id="hmRename">Rename</button>
   <button id="hmFollow">Follow</button>
@@ -194,7 +202,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.7</div>
+  <div class="ver">beta v0.2.8</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -213,7 +221,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.7</div>
+  <div class="ver">beta v0.2.8</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
