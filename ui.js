@@ -364,14 +364,14 @@
     var pose=new Float64Array(RS.NJ),k,I=r.inj;
     for(k=0;k<RS.NJ;k++){var a=r.ctrls[k].j.getJointAngle(),J=RS.JT[k];pose[k]=I&&(I.broken[k]||I.gone[k])?a:Math.max(J.lo,Math.min(J.hi,a));}
     var px=r.bodies[3].getPosition().x;
-    r.bodies.forEach(function(b){world.destroyBody(b);});
+    allParts(r).forEach(function(b){world.destroyBody(b);});
     RS.FLAGS.soft=0;
     var n=RS.buildRig(world,px,0,-(++group),{pose:pose,rootAng:r.parts[3].getAngle(),clear:0.01,dir:-r.dir,scale:r.scale,wid:r.wid});
     ['num','name','skin','blood','bl','koT','dead','headCrushed'].forEach(function(f){if(r[f]!=null)n[f]=r[f];});
     if(I)for(k=0;k<RS.NJ;k++){if(I.gone[k]&&(k%3===0||!I.gone[k-1]))RS.sever(n,k);else if(I.broken[k])RS.breakBone(n,k,true);}
     n.ev=[];rigs[i]=n;if(camFollow===r)camFollow=n;
   }
-  function removeRig(r){var i=rigs.indexOf(r);if(i<0)return;if(camFollow===r)camFollow=null;r.bodies.forEach(function(b){world.destroyBody(b);});rigs.splice(i,1);liveBufs.splice(i,1);}
+  function removeRig(r){var i=rigs.indexOf(r);if(i<0)return;if(camFollow===r)camFollow=null;allParts(r).forEach(function(b){world.destroyBody(b);});rigs.splice(i,1);liveBufs.splice(i,1);}
   document.getElementById('hmRename').onclick=function(){var r=menuRig;closeMenu();if(r)openRename(r);};
   document.getElementById('hmFollow').onclick=function(){var r=menuRig;closeMenu();camFollow=camFollow===r?null:r;camT=null;};
   document.getElementById('hmTurn').onclick=function(){if(menuRig)turnAround(menuRig);closeMenu();};
@@ -471,6 +471,10 @@
   var parts=[],stains=[],MAXP=1400,gL=2,STICK=0.35;
   // draw layers, bottom to top: 0 head and torso, 1 legs, 2 arms (blood, tears and strands go on the layer they came from)
   function layerOf(k){return k<4?0:((k-4)%6<3?2:1);}
+  // parts are numbered 0-15 for the body, then 16+ for chunks of shattered limbs (rig.chunks)
+  function partOf(r,k){var nb=r.bodies.length;return k<nb?r.bodies[k]:r.chunks[k-nb].b;}
+  function layerK(r,k){var nb=r.bodies.length;return layerOf(k<nb?k:r.chunks[k-nb].k);}
+  function allParts(r){return r.chunks?r.bodies.concat(r.chunks.map(function(c){return c.b;})):r.bodies;}
   function gush(x,y,vx,vy,n,spd,spread,gib){
     for(var i=0;i<n&&parts.length<MAXP;i++){
       var a=Math.random()*Math.PI*2,s=spd*(0.3+Math.random()*0.9);
@@ -489,20 +493,20 @@
     if(a.length>=60){var o=a[Math.random()*a.length|0];o.s=Math.min(0.05,o.s+s*0.25);return;}
     a.push({x:lx,y:ly,s:s,a:Math.random()*6.28});
   }
-  function addDecal(r,k,w,s){var lp=r.bodies[k].getLocalPoint(w);addDecalL(r,k,lp.x,lp.y,s);}
+  function addDecal(r,k,w,s){var lp=partOf(r,k).getLocalPoint(w);addDecalL(r,k,lp.x,lp.y,s);}
   function randPt(b){ // a random point inside a body part
     var vs=b.getFixtureList().getShape().m_vertices,v=vs[Math.random()*vs.length|0],u=vs[Math.random()*vs.length|0],t=Math.random()*0.8,m=Math.random();
     return b.getWorldPoint(Vec2((v.x*m+u.x*(1-m))*t,(v.y*m+u.y*(1-m))*t));
   }
-  function splats(r,k,n,s){for(var i=0;i<n;i++)addDecal(r,k,randPt(r.bodies[k]),s*(0.6+Math.random()*0.8));}
+  function splats(r,k,n,s){for(var i=0;i<n;i++)addDecal(r,k,randPt(partOf(r,k)),s*(0.6+Math.random()*0.8));}
   function hitBody(q){ // which body part (if any) a drop is inside
-    for(var i=0;i<rigs.length;i++){var bs=rigs[i].bodies;
+    for(var i=0;i<rigs.length;i++){var bs=allParts(rigs[i]);
       for(var k=0;k<bs.length;k++){var b=bs[k];if(b===q.skip&&q.skT>0)continue;var f=b.getFixtureList();if(!f)continue;
         var ab=f.getAABB(0);if(q.x<ab.lowerBound.x||q.x>ab.upperBound.x||q.y<ab.lowerBound.y||q.y>ab.upperBound.y)continue;
         if(f.testPoint(Vec2(q.x,q.y)))return {r:rigs[i],k:k,b:b,f:f};}}
     return null;
   }
-  function stick(q,h){var lp=h.b.getLocalPoint(Vec2(q.x,q.y));q.on=h.b;q.fx=h.f;q.rig=h.r;q.k=h.k;q.lx=lp.x;q.ly=lp.y;q.L=layerOf(h.k);if(q.vol==null)q.vol=2+(Math.random()*6|0);q.ph=Math.random()*6;}
+  function stick(q,h){var lp=h.b.getLocalPoint(Vec2(q.x,q.y));q.on=h.b;q.fx=h.f;q.rig=h.r;q.k=h.k;q.lx=lp.x;q.ly=lp.y;q.L=layerK(h.r,h.k);if(q.vol==null)q.vol=2+(Math.random()*6|0);q.ph=Math.random()*6;}
   function stain(x,r){
     for(var i=stains.length-1;i>=Math.max(0,stains.length-40);i--){var s=stains[i];if(Math.abs(s.x-x)<s.w*0.6){s.w=Math.min(2,s.w+r*0.9);s.h=Math.min(0.05,s.h+r*0.12);return;}}
     stains.push({x:x,w:r*5,h:0.01+r*0.4});if(stains.length>300)stains.shift();
@@ -541,6 +545,8 @@
         }
       });
       if(r.ev)r.ev.length=0;
+      if(r.chunks)for(var ci=0;ci<r.chunks.length;ci++){var ch=r.chunks[ci];if(ch.seen)continue;ch.seen=1;var ck=r.bodies.length+ci;
+        r.dec=r.dec||[];splats(r,ck,6,0.03);if(gore){var cp=ch.b.getPosition();gL=layerOf(ch.k);gush(cp.x,cp.y,0,0.5,20,1.5,1);}}
       // tears: small drops from the eye while they're hurting and awake (not gore, so always on)
       var hurtLvl=r.dead||r.koT>0?0:Math.max(r.pain||0,r.cowering?0.3:0);
       if(hurtLvl>0.12&&!r.headCrushed&&!(r.inj&&r.inj.gone[0])&&Math.random()<dt*(0.8+2.5*Math.min(1,hurtLvl))&&parts.length<MAXP){
@@ -659,6 +665,12 @@
         ctx.strokeStyle='#1b1b1d';ctx.lineWidth=Math.max(1,0.012*cam.z);ctx.stroke();
         if(k===1)drawNumber(r);
       });
+      if(r.chunks)r.chunks.forEach(function(ch,ci){ // pieces of a shattered limb: raw and bloody
+        if(layerOf(ch.k)!==L)return;var b=ch.b,u=b.getUserData()||{};if(!!u.far!==far)return;var f=b.getFixtureList();if(!f)return;
+        ctx.beginPath();polyPath(b,f.getShape());ctx.fillStyle=rgb(mix(base,BLOOD,0.3),far?0.72:1);ctx.fill();ctx.fillStyle=bodyPat(skinPattern(),b,64);ctx.fill();
+        var D=r.dec&&r.dec[r.bodies.length+ci];if(D&&D.length){ctx.save();ctx.clip();drawDecals(b,D,far);ctx.restore();ctx.beginPath();polyPath(b,f.getShape());}
+        ctx.strokeStyle='#1b1b1d';ctx.lineWidth=Math.max(1,0.012*cam.z);ctx.stroke();
+      });
     });
   }
   function drawStrands(L){ // red strings of muscle and gut still joining a torn-off limb to the stump
@@ -670,7 +682,7 @@
         for(var i=0;i<s.n;i++){
           var o=(i-(s.n-1)/2)*0.018*cam.z*(1-0.7*taut),sg=slack*0.5+0.01*cam.z*Math.sin(s.seed+i*2.1);
           var mx=(a.x+b.x)/2-dy/d*o,my=(a.y+b.y)/2+dx/d*o+sg;
-          var w=Math.max(1.5,(0.022-0.005*i)*cam.z*(1-0.5*taut));
+          var w=Math.max(s.thin?0.8:1.5,(0.022-0.005*(i%3))*cam.z*(1-0.5*taut)*(s.thin?0.45:1));
           ctx.beginPath();ctx.moveTo(a.x-dy/d*o*0.4,a.y+dx/d*o*0.4);ctx.quadraticCurveTo(mx,my,b.x-dy/d*o*0.4,b.y+dx/d*o*0.4);
           ctx.strokeStyle='#3a0204';ctx.lineWidth=w+2;ctx.lineCap='round';ctx.stroke();
           ctx.strokeStyle=i%2?'#b8323a':'#8e0f14';ctx.lineWidth=w;ctx.stroke();
