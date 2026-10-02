@@ -138,7 +138,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bClean">Clean up blood</button>
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
-  <div class="ver">beta v0.1.17</div>
+  <div class="ver">beta v0.1.18</div>
 </div>
 
 <div id="splash">
@@ -146,7 +146,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <div><span class="tag">BETA</span></div>
   <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
   <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
-  <div class="ver">beta v0.1.17</div>
+  <div class="ver">beta v0.1.18</div>
   <button id="bPlay">Play</button>
   <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sGore" class="tg sm">Blood &amp; gore: on</button></div>
 </div>
