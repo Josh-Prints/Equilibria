@@ -184,3 +184,8 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Rough results: one break never passes out; two breaks at once, an 8 m feet-first fall, or a torn-off arm does; every limb broken drifts in and out.
 - Hold menu "Follow" sets `camFollow`; the camera eases to that pelvis each frame. Panning, Remove or Reset cancels it; Turn around keeps it.
 - Tears (v0.1.8): while a human is awake and hurting (`pain` > 0.12 or cowering), `goreStep` spawns small blue tear particles (`t:true`) at the eye. They cling to the head (`hb`, local `lx/ly`), run downhill over it, then drip off and vanish on the ground without staining. They show even with Gore off.
+
+## v0.1.9: easier limb crush, strands, slow wake-up
+- Limb crush threshold is now `crushLimb` 11.5 (was the shared 13; the head stays at `crushImp` 13). `ripImp` went from 22 to 19.
+- Strands (`FLAGS.strands`): `sever()` swaps the revolute joint for a RopeJoint, starting at 0.16 m long. `strandStep` (in `injuries`) lengthens it while the pull is over 25 N, and once it passes its random max of 0.35-0.6 m it snaps and emits ev 'snap'. ui.js `drawStrands` draws 2-4 sagging red strings per strand. Note: planck's RopeJoint.getReactionForce throws before its first step, so that call is wrapped in try/catch.
+- Slow wake-up: when a KO ends, `rig.groggy` is set to `groggyT` (5 s). During that time stiffness is capped by a ramp from 0.03 up to 1, and getting up waits until the ramp passes 0.3. The HUD shows "Waking up".
