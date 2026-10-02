@@ -309,7 +309,7 @@
 
   document.getElementById('bSpawn').onclick=function(){spawn('stand');};
   document.getElementById('bReset').onclick=document.getElementById('bReset2').onclick=function(){init();pauseMenu(false);};
-  var userPaused=false,MAXR=10;
+  var userPaused=false,MAXR=Infinity; // no cap on people
   function setOn(id,on){document.getElementById(id).classList.toggle('on',!!on);}
   function $(id){return document.getElementById(id);}
   function tgl(id){var c=$(id);c.checked=!c.checked;syncMenu();}
@@ -473,7 +473,7 @@
   };
   function sfx(n,a){if(AC&&opt('oSound')&&AC.state==='running')SFX[n](a);}
 
-  var parts=[],stains=[],MAXP=1400,gL=2,STICK=0.35;
+  var parts=[],stains=[],MAXP=Infinity,gL=2,STICK=0.35;
   // draw layers, bottom to top: far arm, far leg, head and torso, near leg, near arm (blood, tears and strands go on the layer they came from)
   // draw slots, bottom to top: 0 far arm, 1 far leg, 2 head and torso, 3 near leg, 4 near arm
   function layerOf(k){if(k<4)return 2;var arm=(k-4)%6<3;return k<10?(arm?0:1):(arm?4:3);}
@@ -552,7 +552,7 @@
   function stick(q,h){var lp=h.b.getLocalPoint(Vec2(q.x,q.y));q.on=h.b;q.fx=h.f;q.rig=h.r;q.k=h.k;q.lx=lp.x;q.ly=lp.y;q.tl=null;q.L=layerK(h.r,h.k);if(q.vol==null)q.vol=2+(Math.random()*6|0);q.ph=Math.random()*6;}
   function stain(x,r){
     for(var i=stains.length-1;i>=Math.max(0,stains.length-40);i--){var s=stains[i];if(Math.abs(s.x-x)<s.w*0.6){s.w=Math.min(2,s.w+r*0.9);s.h=Math.min(0.05,s.h+r*0.12);return;}}
-    stains.push({x:x,w:r*5,h:0.01+r*0.4});if(stains.length>300)stains.shift();
+    stains.push({x:x,w:r*5,h:0.01+r*0.4});
   }
   function bodyOf(r,j){return r.rc[j].b;}
   function anchorA(c){return c.a.getWorldPoint(c.j.getLocalAnchorA());}
