@@ -173,3 +173,8 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 ## Alpha shell (main menu, pause menu)
 - Main menu (#splash): Play, Sound and Blood & gore toggles (saved in localStorage). Pause button opens #pmenu: Resume, Slow motion, Sound, Blood & gore, Clean up blood, Reset scene, Main menu.
 - Debug panel and every behaviour switch live in hidden divs (checkboxes still drive ui.js). HUD top right shows each ragdoll's state and blood. Max 10 ragdolls (oldest removed).
+
+## Variety, facing, hold menu (beta v0.1.5)
+- `buildRig` options `scale` (size), `wid` (build) and `dir` (-1 faces -x). A -x rig is built mirrored and the controller talks to it through `mirrorBody`/`mirrorJoint` wrappers (reflect x, flip angles/torques/limits), so every reflex works unchanged. `rig.bodies`/`rig.rc` are the real bodies/joints: the page draws with those, the sim uses `rig.parts`/`rig.ctrls`.
+- Page: each spawn gets scale 0.97-1.03, width 0.95-1.05 and its own skin tone; spawns avoid overlapping others. Holding a human opens a menu: Rename, Turn around (rebuilds mirrored in the same pose, keeping injuries/blood/name), Heal, Kill, Remove.
+- Version label (main + pause menu): beta vMAJOR.MINOR.PATCH. Josh's rule: every change bumps PATCH, bigger changes MINOR, releases MAJOR.

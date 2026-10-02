@@ -82,22 +82,24 @@ var RS=(function(){
   function buildRig(w,x,y,g,o,forGains){
     o=o||{};
     var pose=o.pose||ZERO,ra=o.rootAng||0,ms=o.mass||1,fr=o.fric||0.9,gs=o.gain||1,clear=(o.clear==null?0.02:o.clear);
-    var tr=fk(pose,0,1.0,ra),minY=1e9,i;
-    ORDER.forEach(function(n){var t=T[n],q=tr[n],lo=q.y-(Math.abs(t.hx*Math.sin(q.a))+Math.abs(t.hy*Math.cos(q.a)));if(lo<minY)minY=lo;});
+    var tr=fk(pose,0,1.0,ra),minY=1e9,i,S=o.scale||1,WD=o.wid||1,M=o.dir===-1?-1:1; // scale: overall size, wid: build (widths), dir -1: faces -x
+    if(S!==1)ORDER.forEach(function(n){var q=tr[n];q.x*=S;q.y*=S;q.ax*=S;q.ay*=S;});
+    function HX(t){return t.hx*S*WD;}function HY(t){return t.hy*S;}
+    ORDER.forEach(function(n){var t=T[n],q=tr[n],lo=q.y-(Math.abs(HX(t)*Math.sin(q.a))+Math.abs(HY(t)*Math.cos(q.a)));if(lo<minY)minY=lo;});
     var lift=clear-minY+(o.h||0),bodies=[];
     ORDER.forEach(function(n,k){
       var t=T[n],q=tr[n];
-      var b=w.createBody({type:'dynamic',position:Vec2(x+q.x,y+q.y+lift),angle:q.a,linearDamping:0.01,angularDamping:0.01});
+      var b=w.createBody({type:'dynamic',position:Vec2(x+M*q.x,y+q.y+lift),angle:M*q.a,linearDamping:0.01,angularDamping:0.01});
       var pv=o.partVar?o.partVar[k]:1;
-      b.createFixture(Box(t.hx,t.hy),{density:t.d*ms*pv,friction:fr,restitution:0,filterGroupIndex:g});
+      b.createFixture(Box(HX(t),HY(t)),{density:t.d*ms*pv,friction:fr,restitution:0,filterGroupIndex:g});
       var md={mass:0,center:Vec2(),I:0};b.getMassData(md);md.I*=INERTIA_X;b.setMassData(md); // heavier rotational inertia keeps PD stable
-      b.setUserData({far:t.far,foot:t.foot,hand:t.hand,bone:[Vec2(t.bone[0]-t.c[0],t.bone[1]-t.c[1]),Vec2(t.bone[2]-t.c[0],t.bone[3]-t.c[1])]});
+      b.setUserData({far:t.far,foot:t.foot,hand:t.hand,bone:[Vec2(M*S*(t.bone[0]-t.c[0]),S*(t.bone[1]-t.c[1])),Vec2(M*S*(t.bone[2]-t.c[0]),S*(t.bone[3]-t.c[1]))]});
       bodies.push(b);
     });
     var joints=[],pend=[];
     JT.forEach(function(jt,k){
       var t=T[jt.child],q=tr[jt.child];
-      var j=w.createJoint(planck.RevoluteJoint({lowerAngle:jt.lo,upperAngle:jt.hi,enableLimit:true,referenceAngle:0},bodies[IDX[t.p]],bodies[IDX[jt.child]],Vec2(x+q.ax,y+q.ay+lift)));
+      var j=w.createJoint(planck.RevoluteJoint({lowerAngle:M>0?jt.lo:-jt.hi,upperAngle:M>0?jt.hi:-jt.lo,enableLimit:true,referenceAngle:0},bodies[IDX[t.p]],bodies[IDX[jt.child]],Vec2(x+M*q.ax,y+q.ay+lift)));
       joints.push(j);
       if(forGains)pend.push({j:j,a:bodies[IDX[t.p]],b:bodies[IDX[jt.child]],an:Vec2(x+q.ax,y+q.ay+lift),om:jt.om,f:1});
     });
@@ -117,14 +119,43 @@ var RS=(function(){
       GAIN=pend.map(function(p){var kp=p.kp*p.f;return {kp:kp,kd:p.kd*p.f,max:kp*TMAX};});
     }
     if(!GAIN){var sw=new planck.World({gravity:Vec2(0,-10)});buildRig(sw,0,0,-1,null,true);}
+    var real=bodies,rjoints=joints;
+    if(M<0){bodies=real.map(mirrorBody);joints=rjoints.map(mirrorJoint);} // the controller sees a +x-facing rig; the mirror flips everything it reads and writes
+    var rc=JT.map(function(jt,k){return {j:rjoints[k],a:real[IDX[T[jt.child].p]],b:real[IDX[jt.child]]};});
     var ctrls=JT.map(function(jt,k){
       return {j:joints[k],a:bodies[IDX[T[jt.child].p]],b:bodies[IDX[jt.child]],g:jt.g,kp:GAIN[k].kp*gs,kd:GAIN[k].kd*gs,max:GAIN[k].max*gs,target:0,t:0};
     });
     var feet=[bodies[IDX.ftf],bodies[IDX.ftn]];
     var soft=FLAGS.soft&&Math.abs(ra)<0.3&&(o.h||0)<0.05,tgt0=new Float64Array(NJ); // soft start (only when spawned upright on the feet): PD targets begin at the spawn pose
     if(soft)for(i=0;i<NJ;i++)tgt0[i]=pose[i];
-    return {parts:bodies,feet:feet,ctrls:ctrls,stiff:new Float64Array(NJ).fill(1),tgt:tgt0,age:soft?0:1e9,prevO:new Float64Array(NO),prevO2:new Float64Array(NO),prevW:new Float64Array(NJ),
+    return {parts:bodies,bodies:real,rc:rc,dir:M,scale:S,wid:WD,feet:feet,ctrls:ctrls,stiff:new Float64Array(NJ).fill(1),tgt:tgt0,age:soft?0:1e9,prevO:new Float64Array(NO),prevO2:new Float64Array(NO),prevW:new Float64Array(NJ),
       lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:new Float64Array(NJ).fill(1),fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},gu:{ph:-1,t:0,downT:0,tries:0,seq:'prone',from:null},dh:[],dp:new Float64Array([1,0,0,0,0]),wph:0,wph2:0,lph:0,wsg:1,b2ok:false,nz:new Float64Array(10),nr:rngMake(12345),st2:{ph:0,t:0,leg:0,next:0,calm:0,x0:0,xl:0,Ts:0.25,clr:0.09,dir:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
+  }
+
+  // MIRROR: a rig facing -x is built mirrored in the world, and the controller talks to it through these wrappers,
+  // which reflect x (positions, velocities, forces) and flip the sign of angles, spins, torques and joint limits.
+  // Everything above them (balance, reflexes, get-up, injuries) then works unchanged.
+  function mv(v){return Vec2(-v.x,v.y);}
+  function mirrorBody(b){
+    return {_r:b,
+      getPosition:function(){return mv(b.getPosition());},getWorldCenter:function(){return mv(b.getWorldCenter());},
+      getLinearVelocity:function(){return mv(b.getLinearVelocity());},getAngle:function(){return -b.getAngle();},
+      getAngularVelocity:function(){return -b.getAngularVelocity();},getWorldPoint:function(p){return mv(b.getWorldPoint(mv(p)));},
+      getLinearVelocityFromWorldPoint:function(p){return mv(b.getLinearVelocityFromWorldPoint(mv(p)));},getLocalCenter:function(){return mv(b.getLocalCenter());},
+      applyTorque:function(t,w){b.applyTorque(-t,w);},applyLinearImpulse:function(J,p,w){b.applyLinearImpulse(mv(J),mv(p),w);},
+      applyForce:function(F,p,w){b.applyForce(mv(F),mv(p),w);},
+      setLinearVelocity:function(v){b.setLinearVelocity(mv(v));},setAngularVelocity:function(w){b.setAngularVelocity(-w);},
+      getMass:function(){return b.getMass();},getInertia:function(){return b.getInertia();},getContactList:function(){return b.getContactList();},
+      getFixtureList:function(){return b.getFixtureList();},getUserData:function(){return b.getUserData();},isDynamic:function(){return b.isDynamic();},
+      getWorld:function(){return b.getWorld();},setAwake:function(f){b.setAwake(f);},getJointList:function(){return b.getJointList();}};
+  }
+  function mirrorJoint(j){
+    return {_r:j,
+      getJointAngle:function(){return -j.getJointAngle();},getJointSpeed:function(){return -j.getJointSpeed();},
+      setLimits:function(lo,hi){j.setLimits(-hi,-lo);},getLowerLimit:function(){return -j.getUpperLimit();},getUpperLimit:function(){return -j.getLowerLimit();},
+      enableLimit:function(f){j.enableLimit(f);},isLimitEnabled:function(){return j.isLimitEnabled();},
+      getReactionForce:function(h){return mv(j.getReactionForce(h));},getAnchorA:function(){return mv(j.getAnchorA());},getAnchorB:function(){return mv(j.getAnchorB());},
+      getBodyA:function(){return j.getBodyA();}};
   }
 
   // PD: torque = kp*(target-angle) - kd*angularVelocity, clamped. Per-joint stiffness scales kp, kd, and the torque cap.
@@ -596,7 +627,7 @@ var RS=(function(){
   }
   function sever(rig,k){
     var I=injOf(rig);if(I.gone[k]||k<3)return; // limbs only
-    var j=rig.ctrls[k].j;j.getBodyA().getWorld().destroyJoint(j);
+    var j=rig.ctrls[k].j;j.getBodyA().getWorld().destroyJoint(j._r||j);
     KIDS[k].forEach(function(q){I.gone[q]=1;I.broken[q]=0;});
     ev(rig,'sever',k);
   }

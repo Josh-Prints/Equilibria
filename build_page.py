@@ -6,7 +6,7 @@ html='''<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Equilibria (alpha)</title>
+<title>Equilibria (beta)</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#2c3035">
 <style>
@@ -32,6 +32,8 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
 #hint{transition:opacity 1s}
 #hud{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:8px;display:flex;flex-direction:column;gap:4px;pointer-events:none;font:600 12px system-ui,Arial,sans-serif}
 .hc{background:var(--panel);border-radius:8px;padding:5px 8px;min-width:110px;pointer-events:auto;cursor:pointer}.hc:active{filter:brightness(1.4)}
+#hmenu{position:fixed;z-index:8;display:flex;flex-direction:column;gap:4px;background:var(--panel);padding:6px;border-radius:12px;box-shadow:0 4px 16px #0008}#hmenu[hidden]{display:none}#hmenu button{font-size:14px;padding:9px 14px;text-align:left}
+.ver{position:absolute;right:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));font:600 12px system-ui,Arial,sans-serif;opacity:.55}
 #rnIn{font:600 18px system-ui,Arial,sans-serif;padding:10px 12px;border-radius:10px;border:0;width:220px;background:#eef0f3;color:#111}
 .ov .row button{min-width:100px}
 .hb{height:6px;border-radius:3px;background:#0006;margin-top:4px;overflow:hidden}.hb i{display:block;height:100%;background:#d63031}
@@ -116,6 +118,13 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bOut">&minus;</button>
 </div>
 <div id="hud"></div>
+<div id="hmenu" hidden>
+  <button id="hmRename">Rename</button>
+  <button id="hmTurn">Turn around</button>
+  <button id="hmHeal">Heal</button>
+  <button id="hmKill">Kill</button>
+  <button id="hmRemove">Remove</button>
+</div>
 <div id="rename" class="ov" hidden>
   <h2>Name this human</h2>
   <input id="rnIn" maxlength="16" placeholder="Name" autocomplete="off">
@@ -130,13 +139,15 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bClean">Clean up blood</button>
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
+  <div class="ver">beta v0.1.5</div>
 </div>
 
 <div id="splash">
   <h1>EQUILIBRIA</h1>
-  <div><span class="tag">ALPHA 0.1</span></div>
+  <div><span class="tag">BETA</span></div>
   <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
   <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
+  <div class="ver">beta v0.1.5</div>
   <button id="bPlay">Play</button>
   <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sGore" class="tg sm">Blood &amp; gore: on</button></div>
 </div>
