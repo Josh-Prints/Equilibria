@@ -242,3 +242,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.8
 - HUD: up to 5 humans show a tab each (all of them, no longer only the last 6); with more than 5 the tabs collapse into one "N humans ▼" tab that opens #hlist, a full-screen menu-style list of every human. Tapping a card there pans to that human and closes the list.
+
+## v0.2.9
+- Bone breaks and limb tear-offs use real-world forces scaled by mass (rig 1.8 kg vs 75 kg person: game N = real N x 0.024). Break: neck 4 kN, back 5.5, upper arm 2.5, forearm 2, wrist 1.8, femur 4, tibia 3.5, ankle 3. Tear-off (SEVJ, per joint): shoulder 10 kN, elbow 7, wrist 5, hip 15, knee 10, ankle 7. Drop tests: head-first neck breaks from ~3 m (all at 8 m), feet-first ankles from ~5 m, knees/hips by 12 m. Dragging can now only just tear off a hand; arms and legs effectively never by pulling.

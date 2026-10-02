@@ -199,7 +199,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.8</div>
+  <div class="ver">beta v0.2.9</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -218,7 +218,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.8</div>
+  <div class="ver">beta v0.2.9</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -833,12 +833,17 @@ var RS=(function(){
   // when that load passes BRK for the joint (arms are weakest); a broken joint loses its limits (it can spin all the
   // way round) and it and everything beyond it go limp. Broken neck = dead. Broken back = legs paralysed.
   // Any broken bone makes it cower for as long as it is conscious. A limb comes off when the smoothed force pulling
-  // the joint apart (not pushing it together) passes SEV: only hard pulls (dragging) do that, never falls or pushes.
+  // the joint apart (not pushing it together) passes SEVJ for that joint: only very hard pulls, never falls or pushes.
   // Measured (smoothed load): standing <10 N, big shoves <45, 3 m drop on the feet 60-90, 8 m drop 110-170 (legs/back),
   // dragging a hand/foot/head away 120-130. Pulling apart: everything <35 except dragging (115-130).
   // Head hits (velocity change on the ground) above koImp knock it out for a few seconds: a big shove onto its back
   // gives ~4.5, a 3 m head-first drop ~6.6. Dying still uses dieImp (where head hits count 1.4x).
-  var BRK=[130,115,115, 60,60,60,105,100,80, 60,60,60,105,100,80],SEV=95;
+  // REAL-WORLD LIMITS (2026-10): the rig weighs 1.8 kg against a real ~75 kg person, so game newtons = real newtons x 0.024.
+  // Bones break at roughly (cadaver tests): neck 4 kN, back 5.5 kN, upper arm 2.5 kN, forearm 2 kN, wrist 1.8 kN,
+  // femur 4 kN, tibia 3.5 kN, ankle 3 kN. Tearing a limb off takes far more (soft tissue and joint capsule, thin data,
+  // rough): shoulder 10 kN, elbow 7 kN, wrist 5 kN, hip 15 kN, knee 10 kN, ankle 7 kN.
+  var RN=0.024,BRK=[4000,5500,5500, 2500,2000,1800,4000,3500,3000, 2500,2000,1800,4000,3500,3000].map(function(f){return f*RN;}),
+    SEVJ=[0,0,0, 10000,7000,5000,15000,10000,7000, 10000,7000,5000,15000,10000,7000].map(function(f){return f*RN;});
   var JNAMES=['neck','upper back','lower back','far shoulder','far elbow','far wrist','far hip','far knee','far ankle','near shoulder','near elbow','near wrist','near hip','near knee','near ankle'];
   var KIDS=[[0],[1],[2],[3,4,5],[4,5],[5],[6,7,8],[7,8],[8],[9,10,11],[10,11],[11],[12,13,14],[13,14],[14]];
   function injOf(rig){return rig.inj||(rig.inj={load:new Float64Array(NJ),pull:new Float64Array(NJ),broken:new Uint8Array(NJ),gone:new Uint8Array(NJ),blo:new Array(NJ).fill(null),bhi:new Array(NJ).fill(null),t:0});}
@@ -982,7 +987,7 @@ var RS=(function(){
       I.pull[k]+=(Math.max(0,-(F.x*dx+F.y*dy)/dl)-I.pull[k])*0.08;
       if(I.t>0.2){ // not during the settle after spawning
         if(FLAGS.inj&&!I.broken[k]&&I.load[k]>BRK[k])breakBone(rig,k,true);
-        if(FLAGS.sever&&k>=3&&I.pull[k]>SEV){sever(rig,k);continue;}
+        if(FLAGS.sever&&k>=3&&I.pull[k]>SEVJ[k]){sever(rig,k);continue;}
       }
       if(!I.broken[k]&&I.blo[k]!=null){var a0=j.getJointAngle();if(a0>=JT[k].lo&&a0<=JT[k].hi){j.setLimits(JT[k].lo,JT[k].hi);I.blo[k]=I.bhi[k]=null;}else{I.blo[k]=Math.min(JT[k].lo,a0);I.bhi[k]=Math.max(JT[k].hi,a0);j.setLimits(I.blo[k],I.bhi[k]);}} // healed: normal range once back inside it
       if(!I.broken[k]&&!j.isLimitEnabled()){var a=j.getJointAngle();if(a>=j.getLowerLimit()&&a<=j.getUpperLimit())j.enableLimit(true);}
