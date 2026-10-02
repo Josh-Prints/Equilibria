@@ -114,7 +114,7 @@ node getup/getup.js               # evaluate the hand-made get-up guess
 ```
 Tools were written against absolute paths in my sandbox and patched to `__dirname`-relative ones; if one breaks, fix the path first. `tools/` are headless-only: **nothing here has been run on the user's phone except the published page**, which the user did run (3 Web Workers worked on their iPhone).
 
-GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340, pairs, scenarios, sigma, lr, resume). Output artifact `ragdoll-policy` contains `best.json` (best held-out total), `policy.json` (latest), `log.txt` (TEST lines compare net vs baseline). Job limit 6 h; `train.js` caps minutes at 340. To resume, commit a previous `policy.json` as `resume.json` and set `resume=true`.
+GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340, pairs, scenarios, sigma, lr, resume). Output artifact `ragdoll-policy` contains `best.json` (best held-out total), `policy.json` (latest), `log.txt` (TEST lines compare net vs baseline). The same files are also committed to the `results` branch under `runs/<run number>/` (cloud Claude sessions cannot download artifacts). Job limit 6 h; `train.js` caps minutes at 340. To resume, commit a previous `policy.json` as `resume.json` and set `resume=true`.
 
 ## 10. Gotchas learned the hard way
 

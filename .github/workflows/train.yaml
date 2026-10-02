@@ -28,6 +28,9 @@ on:
         description: 'Soft start: ease into standing after spawning (true/false)'
         default: 'true'
 
+permissions:
+  contents: write
+
 jobs:
   train:
     runs-on: ubuntu-latest
@@ -53,3 +56,20 @@ jobs:
         with:
           name: ragdoll-policy
           path: out/
+      - name: Save results to the results branch
+        if: always()
+        run: |
+          set -e
+          D=runs/${{ github.run_number }}
+          git config --global user.name github-actions
+          git config --global user.email github-actions@users.noreply.github.com
+          if git fetch --depth=1 origin results 2>/dev/null; then
+            git worktree add -B results /tmp/res FETCH_HEAD
+          else
+            git worktree add --orphan -b results /tmp/res
+          fi
+          cd /tmp/res
+          mkdir -p "$D" && cp -r "$GITHUB_WORKSPACE"/out/. "$D"/
+          git add "$D"
+          git commit -m "Training results, run ${{ github.run_number }}"
+          git push origin results
