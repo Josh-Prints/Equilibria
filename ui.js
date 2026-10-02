@@ -515,6 +515,12 @@
         }
       });
       if(r.ev)r.ev.length=0;
+      // tears: small drops from the eye while they're hurting and awake (not gore, so always on)
+      var hurtLvl=r.dead||r.koT>0?0:Math.max(r.pain||0,r.cowering?0.3:0);
+      if(hurtLvl>0.12&&!r.headCrushed&&!(r.inj&&r.inj.gone[0])&&Math.random()<dt*(0.8+2.5*Math.min(1,hurtLvl))&&parts.length<MAXP){
+        var hd=r.bodies[0],S=r.scale||1,lx=0.055*(r.dir||1)*S,ly=0.03*S,e=hd.getWorldPoint(Vec2(lx,ly));
+        parts.push({x:e.x,y:e.y,vx:0,vy:0,r:(0.011+Math.random()*0.005)*S,g:false,t:true,life:4,hb:hd,lx:lx,ly:ly,hw:0.09*S,hh:0.115*S});
+      }
       if(!gore)return;
       // spurting stumps: pulses with the heartbeat, weaker and faster as the blood runs out; a dead heart just oozes
       var bl=r.blood==null?1:r.blood,alive=!r.dead;
@@ -535,9 +541,17 @@
     });
     // particles: fall, land on the ground (stain + tiny splat sound)
     for(var i=parts.length-1;i>=0;i--){
-      var q=parts[i];q.vy-=10*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt;
+      var q=parts[i];
+      if(q.hb){ // a tear still on the face: runs slowly downhill over the head, then drips off
+        var ha=q.hb.getAngle(),c=Math.cos(ha),sn=Math.sin(ha);q.lx+=-sn*0.12*dt;q.ly+=-c*0.12*dt;q.life-=dt;
+        var wp=q.hb.getWorldPoint(Vec2(q.lx,q.ly));q.x=wp.x;q.y=wp.y;
+        if(Math.abs(q.lx)>q.hw||Math.abs(q.ly)>q.hh||q.life<2.5){var hv=q.hb.getLinearVelocity();q.vx=hv.x;q.vy=hv.y;q.hb=null;}
+        else continue;
+      }
+      q.vy-=10*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt;
       if(q.y<=q.r*0.5){
         if(q.g){q.y=q.r*0.5;q.vy*=-0.25;q.vx*=0.5;if(Math.abs(q.vy)<0.2){stain(q.x,q.r*0.8);q.life=Math.min(q.life,0);}}
+        else if(q.t)q.life=0;
         else{stain(q.x,q.r);if(q.r>0.012)sfx('splat',Math.min(1,-q.vy/5));q.life=0;}
       }
       if(q.life<=0)parts.splice(i,1);
@@ -604,7 +618,9 @@
   }
   function drawBlood(){
     ctx.fillStyle='#8a0a0a';ctx.beginPath();
-    for(var i=0;i<parts.length;i++){var q=parts[i];if(q.g)continue;var s=toScreen(q);var rr=Math.max(1.2,q.r*cam.z);ctx.rect(s.x-rr/2,s.y-rr/2,rr,rr);}
+    for(var i=0;i<parts.length;i++){var q=parts[i];if(q.g||q.t)continue;var s=toScreen(q);var rr=Math.max(1.2,q.r*cam.z);ctx.rect(s.x-rr/2,s.y-rr/2,rr,rr);}
+    ctx.fill();ctx.fillStyle='#74c0f0';ctx.beginPath(); // tears
+    for(i=0;i<parts.length;i++){q=parts[i];if(!q.t)continue;s=toScreen(q);rr=Math.max(2.5,q.r*cam.z);ctx.moveTo(s.x+rr/2,s.y);ctx.arc(s.x,s.y,rr/2,0,7);}
     ctx.fill();ctx.fillStyle='#5a0505';ctx.beginPath();
     for(i=0;i<parts.length;i++){q=parts[i];if(!q.g)continue;s=toScreen(q);rr=Math.max(2,q.r*cam.z);ctx.moveTo(s.x+rr,s.y);ctx.arc(s.x,s.y,rr,0,7);}
     ctx.fill();
@@ -715,6 +731,6 @@
     if(!paused)goreStep(Math.min(dt,0.05));
     draw();if(++injN%10===0){injSync();hud();}requestAnimationFrame(frame);
   }
-  window.EQ={rigs:function(){return rigs;},cam:function(){return cam;},follow:function(){return camFollow;}}; // for poking at it from the console
+  window.EQ={rigs:function(){return rigs;},parts:function(){return parts;},cam:function(){return cam;},follow:function(){return camFollow;}}; // for poking at it from the console
   init();updateInfo();requestAnimationFrame(frame);
 })();
