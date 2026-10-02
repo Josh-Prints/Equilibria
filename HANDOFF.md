@@ -248,3 +248,10 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.10
 - Realism slider in settings (FLAGS.realism, saved as eqOpts.real): 0 Glass (default values halved: breaks, tears and crushes far easier), 1 Default (the pre-v0.2.5 tuning: crush on one-tick velocity change with old CRUSHL x1.75, old BRK, single SEV 95) - the starting value, 2 Realistic (v0.2.5/v0.2.9 real-world numbers). Crush threshold slider still multiplies on top (value/7).
+
+## v0.2.11 — Handgun
+- Spawn button opens a small menu (`#spmenu`): Human or Handgun. A canvas tap closes it.
+- `spawnGun()` (ui.js) drops a dynamic pistol body (slide, grip, trigger guard) at the camera centre; items live in `items[]`, effects in `fx[]`.
+- Drag the gun to aim; a quick tap (<350 ms, <12 px) on it calls `fire(g)`: raycast 40 m along the barrel, tracer + muzzle flash, recoil impulse, `bang` sound.
+- Hits push the body, cause pain, and with gore on add entry/exit blood, decals and a wound (`r.hole`) that oozes; `r.holes` adds to bleed rate in sim.js.
+- Headshot kills (unless Gore is None). Other non-pelvis parts break the joint with chance 0.8 Glass / 0.5 Default / 0.35 Realistic.
