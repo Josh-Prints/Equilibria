@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Equilibria (beta)</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#2c3035">
+<meta name="theme-color" content="#0c0b0a">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
-:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#2c3035;--fg:#e6e9ed;--btn:#3d434b;--panel:#23272cdd}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#0c0b0a;--fg:#e9e4d8;--btn:#151310;--panel:#0f0e0ce6}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--fg);font-family:system-ui,Arial,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 canvas#c{display:block;width:100%;height:100%;touch-action:none}
 #bar{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;justify-content:center;flex-wrap:nowrap;padding:0 8px}
@@ -48,6 +48,21 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
 .ov button{min-width:220px;font-size:16px}
 #smenu{z-index:11}.sl{width:260px;max-width:86vw}.slh{display:flex;justify-content:space-between;font:600 15px system-ui,Arial,sans-serif;margin-bottom:4px}
 .sl input{width:100%;accent-color:#c0392b;height:28px}.sld{display:flex;justify-content:space-between;font-size:11px;opacity:.6}.slx{font-size:12px;opacity:.7;max-width:260px;text-align:center;min-height:32px}
+/* in-game: same dark CRT look as the menus */
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px);box-shadow:inset 0 0 90px 10px #000c}
+#bar button{font:500 20px/1 Teko,system-ui,sans-serif;letter-spacing:1px;text-transform:uppercase;padding:9px 10px 6px;flex:0 1 auto;min-width:0;border-radius:2px;background:#11100ee6;border:1px solid #3a342a;color:#c9c2b4;box-shadow:none}
+#bar button:active{color:#ffb020;border-color:#ffb020;filter:none;text-shadow:0 0 10px #ffb02088}
+#bar button.on{background:#ffb020;color:#0c0b0a;border-color:#ffb020}
+#hint{font:400 12px 'Share Tech Mono',monospace;color:#a9a397}
+#hud{font:400 12px 'Share Tech Mono',monospace}
+.hc{border-radius:2px;border:1px solid #2c2720;border-left:2px solid #ffb020;background:#0f0e0ce6;color:#d8d2c4}
+.hb{border-radius:0;background:#2a2520}
+#hmenu{border-radius:2px;border:1px solid #3a342a;background:#0f0e0cf2}
+#hmenu button{font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;background:none;border-radius:0;color:#c9c2b4;padding:8px 14px 5px}
+#hmenu button:active{color:#ffb020;filter:none}
+#rename.gm{align-items:flex-start!important}#rename .gt{font-size:clamp(34px,10vw,52px)}#rename .row{gap:16px}
+#rename .row button{all:unset;cursor:pointer;font:500 30px/1.1 Teko,system-ui,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#a9a397}#rename .row button:active{color:#ffb020}
+#rnIn{font:400 18px 'Share Tech Mono',monospace;border-radius:0;background:#14120f;color:#ffb020;border:1px solid #3a342a;outline:none}
 /* glitchy dark menus (main, pause, settings): CRT scanlines, film noise, chromatic split title, flicker */
 .gm{background:radial-gradient(ellipse at 30% 40%,#16130f 0%,#070707 55%,#000 100%)!important;backdrop-filter:none!important;align-items:flex-start!important;justify-content:center!important;text-align:left!important;
   padding:24px 24px 24px max(28px,10vw)!important;gap:8px!important;font-family:Teko,'Share Tech Mono',system-ui,sans-serif;color:#e9e4d8;overflow:hidden;animation:gmShake 7s infinite steps(1)}
@@ -145,7 +160,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
 </div>
 <div id="hint">1 finger: drag ragdoll or pan · 2 fingers: zoom</div>
 <div id="bar">
-  <button id="bSpawn">&#x2795; Spawn</button>
+  <button id="bSpawn">Spawn</button>
   <button id="bPause">Pause</button>
   <button id="bReset2">Reset</button>
   <button id="bIn">+</button>
@@ -160,8 +175,8 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="hmKill">Kill</button>
   <button id="hmRemove">Remove</button>
 </div>
-<div id="rename" class="ov" hidden>
-  <h2>Name this human</h2>
+<div id="rename" class="ov gm" hidden>
+  <h2 class="gt" data-t="NAME THIS HUMAN">NAME THIS HUMAN</h2>
   <input id="rnIn" maxlength="16" placeholder="Name" autocomplete="off">
   <div class="row"><button id="rnOk">Save</button><button id="rnCancel">Cancel</button></div>
 </div>
@@ -176,7 +191,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.6</div>
+  <div class="ver">beta v0.2.7</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -195,7 +210,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.6</div>
+  <div class="ver">beta v0.2.7</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1868,8 +1883,8 @@ var RS=(function(){
   function groundPattern(){ // grey concrete, 64 px = 1 m, made once
     if(groundPat)return groundPat;
     var c=document.createElement('canvas');c.width=c.height=64;var g=c.getContext('2d'),i;
-    g.fillStyle='#4b4f55';g.fillRect(0,0,64,64);
-    for(i=0;i<500;i++){var v=60+Math.random()*40|0;g.fillStyle='rgba('+v+','+(v+3)+','+(v+8)+','+(0.3+Math.random()*0.4)+')';g.fillRect(Math.random()*64|0,Math.random()*64|0,1,1);}
+    g.fillStyle='#1c1a17';g.fillRect(0,0,64,64);
+    for(i=0;i<500;i++){var v=18+Math.random()*26|0;g.fillStyle='rgba('+v+','+(v+3)+','+(v+8)+','+(0.3+Math.random()*0.4)+')';g.fillRect(Math.random()*64|0,Math.random()*64|0,1,1);}
     g.fillStyle='rgba(0,0,0,0.18)';g.fillRect(0,0,1,64);g.fillRect(0,0,64,1); // slab seams
     groundPat=ctx.createPattern(c,'repeat');return groundPat;
   }
@@ -1886,7 +1901,8 @@ var RS=(function(){
   }
   function drawGround(gy){
     ctx.save();ctx.imageSmoothingEnabled=false;ctx.fillStyle=worldPat(groundPattern(),64);ctx.fillRect(0,gy,W,H-gy+1);
-    ctx.fillStyle='#6d727a';ctx.fillRect(0,gy,W,Math.max(2,0.03*cam.z)); // lit top edge
+    ctx.fillStyle='#3a3329';ctx.fillRect(0,gy,W,Math.max(2,0.03*cam.z)); // top edge
+    ctx.fillStyle='rgba(255,176,32,0.35)';ctx.fillRect(0,gy,W,1); // thin amber line along the floor
     ctx.fillStyle='#4a0606';
     stains.forEach(function(s){var a=toScreen(Vec2(s.x,0));ctx.globalAlpha=0.92;ctx.beginPath();ctx.ellipse(a.x,a.y+1,Math.max(0.5,s.w*cam.z*0.5),Math.max(0.4,s.h*cam.z),0,0,Math.PI*2);ctx.fill();});
     ctx.restore();
@@ -1992,12 +2008,12 @@ var RS=(function(){
   }
   function draw(){
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.fillStyle='#2c3035';ctx.fillRect(0,0,W,H); // dark sandbox backdrop
-    var fg='#dfe3e8';
+    ctx.fillStyle='#0c0b0a';ctx.fillRect(0,0,W,H); // near-black backdrop (matches the menus)
+    var fg='#e9e4d8';
     ctx.strokeStyle=fg;ctx.fillStyle=fg;ctx.lineWidth=2;
     var gy=toScreen(Vec2(0,0)).y;
     var g0=toWorld(0,H),g1=toWorld(W,0),gx,gyy; // 1 m grid
-    ctx.save();ctx.globalAlpha=0.15;ctx.lineWidth=1;ctx.beginPath();
+    ctx.save();ctx.globalAlpha=0.07;ctx.strokeStyle='#ffb020';ctx.lineWidth=1;ctx.beginPath();
     for(gx=Math.ceil(g0.x);gx<=g1.x;gx++){var sx=toScreen(Vec2(gx,0)).x;ctx.moveTo(sx,0);ctx.lineTo(sx,H);}
     for(gyy=Math.ceil(g0.y);gyy<=g1.y;gyy++){var sy=toScreen(Vec2(0,gyy)).y;ctx.moveTo(0,sy);ctx.lineTo(W,sy);}
     ctx.stroke();ctx.restore();
@@ -2005,7 +2021,7 @@ var RS=(function(){
     for(var L=0;L<5;L++){drawFlesh(L,true);drawFlesh(L,false);drawStrands(L);drawBlood(L);} // far arm, far leg, body, near leg, near arm on top
     if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;drawBodies(false);}
     { // name above the head (only once you've named them)
-      ctx.font='600 13px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
+      ctx.font='500 18px Teko,system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
       rigs.forEach(function(r){if(!r.name)return;var hp=toScreen(r.bodies[0].getPosition());ctx.fillText(r.name,hp.x,hp.y-0.2*cam.z);});
     }
     if(opt('oSkel')){
