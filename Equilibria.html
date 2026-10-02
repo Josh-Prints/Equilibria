@@ -44,6 +44,8 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
 .ov{position:fixed;inset:0;background:#000a;backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:9}
 .ov[hidden]{display:none}.ov h2{margin:0 0 6px;font:800 26px system-ui,Arial,sans-serif;letter-spacing:3px}
 .ov button{min-width:220px;font-size:16px}
+#smenu{z-index:11}.sl{width:260px;max-width:86vw}.slh{display:flex;justify-content:space-between;font:600 15px system-ui,Arial,sans-serif;margin-bottom:4px}
+.sl input{width:100%;accent-color:#c0392b;height:28px}.sld{display:flex;justify-content:space-between;font-size:11px;opacity:.6}.slx{font-size:12px;opacity:.7;max-width:260px;text-align:center;min-height:32px}
 </style>
 </head>
 <body>
@@ -131,21 +133,28 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="mResume">Resume</button>
   <button id="bSlowB" class="tg">Slow motion: off</button>
   <button id="mSound" class="tg">Sound: on</button>
-  <button id="mGore" class="tg">Blood &amp; gore: on</button>
+  <button id="mSet">Settings</button>
   <button id="bClean">Clean up blood</button>
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
-  <div class="ver">beta v0.2.1 hotfix 1</div>
+  <div class="ver">beta v0.2.2</div>
 </div>
 
+<div id="smenu" class="ov" hidden>
+  <h2>Settings</h2>
+  <div class="sl"><div class="slh"><span>Crush threshold</span><b id="vCrush">7</b></div><input type="range" id="rCrush" min="1" max="10" step="1" value="7"><div class="sld"><span>crushes easily</span><span>almost never</span></div></div>
+  <div class="sl"><div class="slh"><span>Gore</span><b id="vGore">10</b></div><input type="range" id="rGore" min="0" max="10" step="1" value="10"><div class="sld"><span>none</span><span>full</span></div></div>
+  <div class="slx" id="gDesc"></div>
+  <button id="sDone">Done</button>
+</div>
 <div id="splash">
   <h1>EQUILIBRIA</h1>
   <div><span class="tag">BETA</span></div>
   <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
   <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
-  <div class="ver">beta v0.2.1 hotfix 1</div>
+  <div class="ver">beta v0.2.2</div>
   <button id="bPlay">Play</button>
-  <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sGore" class="tg sm">Blood &amp; gore: on</button></div>
+  <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sSet" class="tg sm">Settings</button></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -775,7 +784,7 @@ var RS=(function(){
       var jt=JT[k],ex1=0.5+Math.random()*1.3,ex2=0.5+Math.random()*1.3,lo=jt.lo-ex1,hi=jt.hi+ex2,sp=hi-lo;
       if(sp>5.6){lo+=(sp-5.6)/2;hi-=(sp-5.6)/2;}
       I.blo[k]=lo;I.bhi[k]=hi;rig.ctrls[k].j.setLimits(lo,hi);rig.ctrls[k].j.enableLimit(true);
-      if(k===0)rig.dead=true;ev(rig,'break',k);}
+      if(k===0&&FLAGS.death!==0)rig.dead=true;ev(rig,'break',k);}
     else rig.age=Math.min(rig.age,0.3); // healed: the limit comes back once the joint is inside its range again (below)
   }
   function addStrand(rig,k,A,B,la,lb,wt,o){ // a bundle of strings (one rope) between two bodies
@@ -868,7 +877,7 @@ var RS=(function(){
       for(k=0;k<ps.length;k++){
         var lim=k===0?FLAGS.crushImp:k<4?1e9:CRUSHL[(k-4)%6]*FLAGS.crushLimb;
         var d=rig.impB[k];if(!(d>lim))continue;
-        if(k===0){if(!rig.dead){rig.dead=true;ev(rig,'crush',0,d);}continue;}
+        if(k===0){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crush',0,d);}continue;}
         if(k<4)continue;
         var j=k-1;if(I.gone[j])continue;
         if(FLAGS.shatter&&FLAGS.sever){ev(rig,'crush',j,d);shatter(rig,j,d>lim*FLAGS.ripImp);}
@@ -881,8 +890,8 @@ var RS=(function(){
       var w=0;for(k=3;k<NJ;k++){if(I.gone[k]&&(k===3||k===6||k===9||k===12||!I.gone[k-1]))w+=k%3===0?1:0.7;else if(I.broken[k])w+=0.05;}
       if(I.broken[1]||I.broken[2])w+=0.1;
       rig.bleedW=w;
-      rig.blood=Math.max(0,rig.blood-0.05*w*(0.3+0.7*rig.blood)*(rig.dead?0.3:1)*dt);
-      if(rig.blood<0.2&&!rig.dead){rig.dead=true;ev(rig,'bledout',0);}
+      rig.blood=Math.max(0,rig.blood-(FLAGS.bleedMul==null?1:FLAGS.bleedMul)*0.05*w*(0.3+0.7*rig.blood)*(rig.dead?0.3:1)*dt);
+      if(rig.blood<0.2&&!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'bledout',0);}
       else if(rig.blood<0.45&&!rig.dead){rig.koT=Math.max(rig.koT||0,0.5);rig.koWhy='blood';}
     }
   }
@@ -989,7 +998,7 @@ var RS=(function(){
     if(rf&&(FLAGS.cower||FLAGS.die||FLAGS.inj||FLAGS.crush))impacts(rig);
     if(FLAGS.inj||FLAGS.sever||rig.inj)injuries(rig,dt);
     if(rf&&(FLAGS.crush||FLAGS.bleed))crushBleed(rig,dt);
-    if(rf&&FLAGS.die&&rig.impD>FLAGS.dieImp)rig.dead=true;
+    if(rf&&FLAGS.die&&FLAGS.death!==0&&rig.impD>FLAGS.dieImp)rig.dead=true;
     if(rig.dead)return goLimp(rig,out);
     if(rig.koT>0){rig.koT-=dt;if(rig.koT<=0){rig.age=0;rig.wakeT=4;rig.groggy=FLAGS.groggyT;}goLimp(rig,out);rig.ko=true;return out;} // knocked out: limp until it comes round
     rig.ko=false;
@@ -1471,17 +1480,20 @@ var RS=(function(){
   function syncMenu(){
     $('bSlowB').textContent='Slow motion: '+(opt('oSlow')?'on':'off');
     $('mSound').textContent=$('sSound').textContent='Sound: '+(opt('oSound')?'on':'off');
-    $('mGore').innerHTML=$('sGore').innerHTML='Blood &amp; gore: '+(opt('oGore')?'on':'off');
-    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),gore:opt('oGore')}));}catch(_){}
+    var cv=+$('rCrush').value,gv=+$('rGore').value;$('vCrush').textContent=cv;$('vGore').textContent=gv;
+    $('oGore').checked=gv>0;GM=gv/10;
+    $('gDesc').textContent=gv===0?'No blood, no limbs coming off, nobody dies.':gv<4?'A little blood, bones break, can die. Limbs stay on.':gv<7?'Bleeding, limbs can be torn off.':gv<10?'Lots of blood, crushed limbs shatter.':'Everything.';
+    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),goreLv:gv,crush:cv}));}catch(_){}
     if(AC&&master)master.gain.value=opt('oSound')?0.9:0;
   }
-  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;$('oGore').checked=so.gore;}}catch(_){}
+  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;if(so.goreLv!=null)$('rGore').value=so.goreLv;else if(so.gore===false)$('rGore').value=0;if(so.crush!=null)$('rCrush').value=so.crush;}}catch(_){}
   function pauseMenu(on){userPaused=on;$('pmenu').hidden=!on;setOn('bPause',on);}
   $('bPause').onclick=function(){pauseMenu(true);};
   $('mResume').onclick=function(){pauseMenu(false);};
   $('bSlowB').onclick=function(){tgl('oSlow');};
   $('mSound').onclick=$('sSound').onclick=function(){tgl('oSound');audioInit();};
-  $('mGore').onclick=$('sGore').onclick=function(){tgl('oGore');};
+  $('mSet').onclick=$('sSet').onclick=function(){$('smenu').hidden=false;};$('sDone').onclick=function(){$('smenu').hidden=true;};
+  $('rCrush').oninput=$('rGore').oninput=syncMenu;
   $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];});pauseMenu(false);};
   $('mMain').onclick=function(){pauseMenu(false);init();var sp=$('splash');sp.hidden=false;sp.style.opacity=1;};
   $('bPlay').onclick=function(){var sp=$('splash');sp.style.transition='opacity .4s';sp.style.opacity=0;setTimeout(function(){sp.hidden=true;},400);audioInit();
@@ -1629,13 +1641,17 @@ var RS=(function(){
   function partOf(r,k){var nb=r.bodies.length;return k<nb?r.bodies[k]:r.chunks[k-nb].b;}
   function layerK(r,k){var nb=r.bodies.length;return layerOf(k<nb?k:r.chunks[k-nb].k);}
   function allParts(r){return r.chunks?r.bodies.concat(r.chunks.filter(function(c){return !c.gone;}).map(function(c){return c.b;})):r.bodies;}
+  var GM=1; // gore setting / 10: scales how much blood comes out
+  function gn(n){return Math.floor(n*GM+Math.random());}
   function gush(x,y,vx,vy,n,spd,spread,gib){
+    n=gn(n);
     for(var i=0;i<n&&parts.length<MAXP;i++){
       var a=Math.random()*Math.PI*2,s=spd*(0.3+Math.random()*0.9);
       parts.push({x:x,y:y,vx:vx+Math.cos(a)*s*spread,vy:vy+Math.sin(a)*s*spread+(spread<1?s*0.2:0),r:gib?0.02+Math.random()*0.03:0.006+Math.random()*0.014,g:!!gib,life:6,L:gL,ck:!gib&&Math.random()<STICK});
     }
   }
   function spray(p,dx,dy,n,spd){ // directed jet
+    n=gn(n);
     for(var i=0;i<n&&parts.length<MAXP;i++){
       var s=spd*(0.6+Math.random()*0.6),j=(Math.random()-0.5)*0.5,c=Math.cos(j),sn=Math.sin(j);
       parts.push({x:p.x,y:p.y,vx:(dx*c-dy*sn)*s,vy:(dx*sn+dy*c)*s,r:0.008+Math.random()*0.014,g:false,life:6,L:gL,ck:Math.random()<0.2});
@@ -1680,9 +1696,9 @@ var RS=(function(){
     var vs=b.getFixtureList().getShape().m_vertices,v=vs[Math.random()*vs.length|0],u=vs[Math.random()*vs.length|0],t=Math.random()*0.8,m=Math.random();
     return b.getWorldPoint(Vec2((v.x*m+u.x*(1-m))*t,(v.y*m+u.y*(1-m))*t));
   }
-  function splats(r,k,n,s){for(var i=0;i<n;i++)addDecal(r,k,randPt(partOf(r,k)),s*(0.6+Math.random()*0.8));}
+  function splats(r,k,n,s){n=gn(n);for(var i=0;i<n;i++)addDecal(r,k,randPt(partOf(r,k)),s*(0.6+Math.random()*0.8));}
   function ooze(r,k,w){
-    if(k<0||parts.length>=MAXP)return;var b=partOf(r,k),f=b&&b.getFixtureList();if(!f)return;
+    if(k<0||parts.length>=MAXP||Math.random()>GM)return;var b=partOf(r,k),f=b&&b.getFixtureList();if(!f)return;
     var q={x:w.x,y:w.y,vx:0,vy:0,r:0.007+Math.random()*0.007,g:false,life:8,ck:true,L:layerK(r,k),vol:4+(Math.random()*6|0)};
     stick(q,{r:r,k:k,b:b,f:f});parts.push(q);
   }
@@ -2022,7 +2038,8 @@ var RS=(function(){
       acc+=dt;
       var use=opt('oUse'),pd=opt('oPD'),reflex=opt('oReflex'),i;
       RS.FLAGS.air=RS.FLAGS.land=RS.FLAGS.fall=opt('oFall')?1:0;
-      RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;RS.FLAGS.cower=opt('oCower')?1:0;RS.FLAGS.die=opt('oDie')?1:0;RS.FLAGS.protect=opt('oProtect')?1:0;RS.FLAGS.inj=opt('oInj')?1:0;RS.FLAGS.sever=opt('oSever')?1:0;RS.FLAGS.crush=RS.FLAGS.bleed=opt('oGore')?1:0;
+      RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;RS.FLAGS.cower=opt('oCower')?1:0;RS.FLAGS.die=opt('oDie')?1:0;RS.FLAGS.protect=opt('oProtect')?1:0;RS.FLAGS.inj=opt('oInj')?1:0;var gv=+$('rGore').value;RS.FLAGS.sever=opt('oSever')&&gv>=4?1:0;RS.FLAGS.shatter=gv>=7?1:0;RS.FLAGS.crush=1;RS.FLAGS.bleed=gv>0?1:0;RS.FLAGS.bleedMul=gv/10;RS.FLAGS.death=gv>0?1:0;if(!gv)RS.FLAGS.die=0;
+      RS.FLAGS.crushLimb=0.25*+$('rCrush').value;RS.FLAGS.crushImp=12*RS.FLAGS.crushLimb; // settings: 7 (default) = 1.75, harder to crush than before (1.25)
       while(acc>=DT){
         if((use||reflex)&&stepCount%SUB===0)for(i=0;i<rigs.length;i++)RS.act(rigs[i],use?ES.theta:ZERO_TH,liveBufs[i],liveRng,{delay:1,noise:0.005,reflex:reflex}); // reflexes run even when the policy is off (untrained = zero weights)
         if(pd)for(i=0;i<rigs.length;i++)RS.pdRig(rigs[i]);

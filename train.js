@@ -633,7 +633,7 @@ var RS=(function(){
       var jt=JT[k],ex1=0.5+Math.random()*1.3,ex2=0.5+Math.random()*1.3,lo=jt.lo-ex1,hi=jt.hi+ex2,sp=hi-lo;
       if(sp>5.6){lo+=(sp-5.6)/2;hi-=(sp-5.6)/2;}
       I.blo[k]=lo;I.bhi[k]=hi;rig.ctrls[k].j.setLimits(lo,hi);rig.ctrls[k].j.enableLimit(true);
-      if(k===0)rig.dead=true;ev(rig,'break',k);}
+      if(k===0&&FLAGS.death!==0)rig.dead=true;ev(rig,'break',k);}
     else rig.age=Math.min(rig.age,0.3); // healed: the limit comes back once the joint is inside its range again (below)
   }
   function addStrand(rig,k,A,B,la,lb,wt,o){ // a bundle of strings (one rope) between two bodies
@@ -726,7 +726,7 @@ var RS=(function(){
       for(k=0;k<ps.length;k++){
         var lim=k===0?FLAGS.crushImp:k<4?1e9:CRUSHL[(k-4)%6]*FLAGS.crushLimb;
         var d=rig.impB[k];if(!(d>lim))continue;
-        if(k===0){if(!rig.dead){rig.dead=true;ev(rig,'crush',0,d);}continue;}
+        if(k===0){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crush',0,d);}continue;}
         if(k<4)continue;
         var j=k-1;if(I.gone[j])continue;
         if(FLAGS.shatter&&FLAGS.sever){ev(rig,'crush',j,d);shatter(rig,j,d>lim*FLAGS.ripImp);}
@@ -739,8 +739,8 @@ var RS=(function(){
       var w=0;for(k=3;k<NJ;k++){if(I.gone[k]&&(k===3||k===6||k===9||k===12||!I.gone[k-1]))w+=k%3===0?1:0.7;else if(I.broken[k])w+=0.05;}
       if(I.broken[1]||I.broken[2])w+=0.1;
       rig.bleedW=w;
-      rig.blood=Math.max(0,rig.blood-0.05*w*(0.3+0.7*rig.blood)*(rig.dead?0.3:1)*dt);
-      if(rig.blood<0.2&&!rig.dead){rig.dead=true;ev(rig,'bledout',0);}
+      rig.blood=Math.max(0,rig.blood-(FLAGS.bleedMul==null?1:FLAGS.bleedMul)*0.05*w*(0.3+0.7*rig.blood)*(rig.dead?0.3:1)*dt);
+      if(rig.blood<0.2&&!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'bledout',0);}
       else if(rig.blood<0.45&&!rig.dead){rig.koT=Math.max(rig.koT||0,0.5);rig.koWhy='blood';}
     }
   }
@@ -847,7 +847,7 @@ var RS=(function(){
     if(rf&&(FLAGS.cower||FLAGS.die||FLAGS.inj||FLAGS.crush))impacts(rig);
     if(FLAGS.inj||FLAGS.sever||rig.inj)injuries(rig,dt);
     if(rf&&(FLAGS.crush||FLAGS.bleed))crushBleed(rig,dt);
-    if(rf&&FLAGS.die&&rig.impD>FLAGS.dieImp)rig.dead=true;
+    if(rf&&FLAGS.die&&FLAGS.death!==0&&rig.impD>FLAGS.dieImp)rig.dead=true;
     if(rig.dead)return goLimp(rig,out);
     if(rig.koT>0){rig.koT-=dt;if(rig.koT<=0){rig.age=0;rig.wakeT=4;rig.groggy=FLAGS.groggyT;}goLimp(rig,out);rig.ko=true;return out;} // knocked out: limp until it comes round
     rig.ko=false;

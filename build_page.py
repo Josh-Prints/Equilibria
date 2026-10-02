@@ -47,6 +47,8 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
 .ov{position:fixed;inset:0;background:#000a;backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:9}
 .ov[hidden]{display:none}.ov h2{margin:0 0 6px;font:800 26px system-ui,Arial,sans-serif;letter-spacing:3px}
 .ov button{min-width:220px;font-size:16px}
+#smenu{z-index:11}.sl{width:260px;max-width:86vw}.slh{display:flex;justify-content:space-between;font:600 15px system-ui,Arial,sans-serif;margin-bottom:4px}
+.sl input{width:100%;accent-color:#c0392b;height:28px}.sld{display:flex;justify-content:space-between;font-size:11px;opacity:.6}.slx{font-size:12px;opacity:.7;max-width:260px;text-align:center;min-height:32px}
 </style>
 </head>
 <body>
@@ -134,21 +136,28 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="mResume">Resume</button>
   <button id="bSlowB" class="tg">Slow motion: off</button>
   <button id="mSound" class="tg">Sound: on</button>
-  <button id="mGore" class="tg">Blood &amp; gore: on</button>
+  <button id="mSet">Settings</button>
   <button id="bClean">Clean up blood</button>
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
-  <div class="ver">beta v0.2.1 hotfix 1</div>
+  <div class="ver">beta v0.2.2</div>
 </div>
 
+<div id="smenu" class="ov" hidden>
+  <h2>Settings</h2>
+  <div class="sl"><div class="slh"><span>Crush threshold</span><b id="vCrush">7</b></div><input type="range" id="rCrush" min="1" max="10" step="1" value="7"><div class="sld"><span>crushes easily</span><span>almost never</span></div></div>
+  <div class="sl"><div class="slh"><span>Gore</span><b id="vGore">10</b></div><input type="range" id="rGore" min="0" max="10" step="1" value="10"><div class="sld"><span>none</span><span>full</span></div></div>
+  <div class="slx" id="gDesc"></div>
+  <button id="sDone">Done</button>
+</div>
 <div id="splash">
   <h1>EQUILIBRIA</h1>
   <div><span class="tag">BETA</span></div>
   <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
   <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
-  <div class="ver">beta v0.2.1 hotfix 1</div>
+  <div class="ver">beta v0.2.2</div>
   <button id="bPlay">Play</button>
-  <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sGore" class="tg sm">Blood &amp; gore: on</button></div>
+  <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sSet" class="tg sm">Settings</button></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
