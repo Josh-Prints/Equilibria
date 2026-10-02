@@ -1,7 +1,7 @@
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -113,7 +113,7 @@ var RS=(function(){
     var soft=FLAGS.soft&&Math.abs(ra)<0.3&&(o.h||0)<0.05,tgt0=new Float64Array(NJ); // soft start (only when spawned upright on the feet): PD targets begin at the spawn pose
     if(soft)for(i=0;i<NJ;i++)tgt0[i]=pose[i];
     return {parts:bodies,feet:feet,ctrls:ctrls,stiff:new Float64Array(NJ).fill(1),tgt:tgt0,age:soft?0:1e9,prevO:new Float64Array(NO),prevO2:new Float64Array(NO),prevW:new Float64Array(NJ),
-      lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:new Float64Array(NJ).fill(1),fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},st2:{ph:0,t:0,leg:0,next:0,calm:0,x0:0,xl:0,Ts:0.25,clr:0.09,dir:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
+      lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:new Float64Array(NJ).fill(1),fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},dh:[],dp:new Float64Array([1,0,0,0,0]),wph:0,st2:{ph:0,t:0,leg:0,next:0,calm:0,x0:0,xl:0,Ts:0.25,clr:0.09,dir:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
   }
 
   // PD: torque = kp*(target-angle) - kd*angularVelocity, clamped. Per-joint stiffness scales kp, kd, and the torque cap.
@@ -335,11 +335,61 @@ var RS=(function(){
     return true;
   }
 
+  // =====================================================================
+  // NEURAL EVENT DETECTOR (FLAGS.nn): a small network looks at what the body feels (the same sensors the policy gets,
+  // now and 25/50 ms ago) and says what is happening: calm, stumbling, falling, being moved (grabbed/dragged/lifted),
+  // or down. Trained offline by supervised learning (tools/det_train.js) on simulated episodes labelled with the truth;
+  // the labels are never available at run time, only the network's guess is. Its guess drives the reactions:
+  // arms wave when falling or being moved, arms out for balance when stumbling, arms brace just before hitting the ground.
+  // =====================================================================
+  var DCLS=['calm','stumble','falling','moved','down'],DNO=49,DLAGS=[3,6],DIN=DNO*(1+DLAGS.length);
+  var DET=(typeof RS_DETW!=='undefined')?RS_DETW:null;
+  function detPush(rig,obs){ // keep the last 7 sensor frames
+    var h=rig.dh,f=new Float64Array(DNO);for(var i=0;i<DNO;i++)f[i]=obs[i];
+    h.unshift(f);if(h.length>7)h.pop();
+  }
+  function detFeat(rig,x){ // current frame + how it changed over the last 25 and 50 ms
+    var h=rig.dh,c=h[0],i,l;
+    for(i=0;i<DNO;i++)x[i]=c[i];
+    for(l=0;l<DLAGS.length;l++){var p=h[Math.min(DLAGS[l],h.length-1)];for(i=0;i<DNO;i++)x[DNO*(l+1)+i]=c[i]-p[i];}
+    return x;
+  }
+  function detForward(W,x,out){ // normalise -> tanh -> tanh -> softmax
+    var nh=W.b1.length,nh2=W.b2.length,no=W.b3.length,i,j,s,h1=new Float64Array(nh),h2=new Float64Array(nh2);
+    for(j=0;j<nh;j++){s=W.b1[j];var r=j*DIN;for(i=0;i<DIN;i++)s+=W.W1[r+i]*(x[i]-W.mu[i])/W.sd[i];h1[j]=Math.tanh(s);}
+    for(j=0;j<nh2;j++){s=W.b2[j];for(i=0;i<nh;i++)s+=W.W2[j*nh+i]*h1[i];h2[j]=Math.tanh(s);}
+    var m=-1e9;for(j=0;j<no;j++){s=W.b3[j];for(i=0;i<nh2;i++)s+=W.W3[j*nh2+i]*h2[i];out[j]=s;if(s>m)m=s;}
+    var z=0;for(j=0;j<no;j++){out[j]=Math.exp(out[j]-m);z+=out[j];}for(j=0;j<no;j++)out[j]/=z;
+    return out;
+  }
+  var DX=new Float64Array(DIN),DO=new Float64Array(5);
+  function detect(rig){
+    if(!DET||rig.dh.length<2)return rig.dp;
+    detForward(DET,detFeat(rig,DX),DO);
+    for(var k=0;k<5;k++)rig.dp[k]+=(DO[k]-rig.dp[k])*0.35; // light smoothing so a single odd frame doesn't flicker the arms
+    return rig.dp;
+  }
+  // reactions driven by the detector's guess (arms + neck only; legs stay with the balance/step controller)
+  function nnReact(rig,tt,dt){
+    var p=rig.dp,ps=rig.parts,hy=ps[0].getPosition().y,ca=wrap(ps[1].getAngle());
+    var wave=Math.min(1,Math.max(0,(Math.max(p[2],p[3])-0.35)/0.4)),bal=Math.min(1,Math.max(0,(p[1]-0.3)/0.4));
+    var brace=p[2]>0.5&&hy<1.25&&hy>0.5; // about to hit the ground: hands go out toward it
+    rig.wph+=dt*2*Math.PI*(2.0+0.8*wave);
+    var w=rig.wph,dir=(-ca+2*rig.e)>0?1:-1;
+    var sF=0.25+0.35*bal+1.2*wave*Math.sin(w)+1.0*wave,sN=0.25+0.35*bal+1.2*wave*Math.sin(w+Math.PI*0.9)+1.0*wave;
+    var eF=0.3+0.7*wave*(0.5+0.5*Math.sin(w+1.2)),eN=0.3+0.7*wave*(0.5+0.5*Math.sin(w+1.2+Math.PI*0.9));
+    if(brace){sF=sN=dir>0?1.3:-0.9;eF=eN=0.4;tt[0]=-0.35;}
+    var mix=Math.max(wave,bal,brace?1:0);
+    tt[3]=tt[3]*(1-mix)+sF*mix;tt[9]=tt[9]*(1-mix)+sN*mix;tt[4]=tt[4]*(1-mix)+eF*mix;tt[10]=tt[10]*(1-mix)+eN*mix;
+    tt[5]=tt[5]*(1-mix)+0.3*wave*Math.sin(w*1.3)*mix;tt[11]=tt[11]*(1-mix)+0.3*wave*Math.sin(w*1.3+1)*mix;
+  }
+
   // run the policy: stiffness + filtered PD targets, with a fixed balance reflex underneath (only when upright on the feet)
   function act(rig,theta,buf,rng,opt){
     opt=opt||{};
     sense(rig,buf.obs,rng,opt.noise);
     forward(theta,buf.obs,buf.out,buf);
+    detPush(rig,buf.obs);if(FLAGS.nn)detect(rig);
     var d=opt.delay||0,h=rig.hist;
     h.unshift(Array.prototype.slice.call(buf.out));if(h.length>4)h.pop();
     var out=h[Math.min(d,h.length-1)];
@@ -385,6 +435,7 @@ var RS=(function(){
       tt[k]=t;
     }
     if(rf&&FLAGS.bal2)bal2(rig,tt,out,ca,dt);
+    if(rf&&FLAGS.nn)nnReact(rig,tt,dt);
     else if(rf&&FLAGS.step)stepReflex(rig,tt,ca,dt);
     // target smoothing: the network can slow it down (smoother) or speed it up; soft start eases in after spawning
     var al=clampA(FILT*(1+0.6*out[O_FILT]),1);
@@ -528,7 +579,7 @@ var RS=(function(){
     return {mean:sum/all.length,best:best};
   }
 
-  return {FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
+  return {DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
     esNoise:esNoise,esStep:esStep,migrate:migrate,runEpisode:runEpisode,evalCandidate:evalCandidate,sampleScenario:sampleScenario,fk:fk,
     NP:NP,NI:NI,NO:NO,NJ:NJ,DT:DT,SUB:SUB,POLICY_HZ:POLICY_HZ,VEL_IT:VEL_IT,POS_IT:POS_IT,JT:JT,ORDER:ORDER,CASES:CASES,wrap:wrap};
 })();
