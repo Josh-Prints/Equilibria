@@ -39,7 +39,8 @@ details button{font-size:14px;padding:8px 12px}
   <label>Workers <input type="number" id="nWork" value="-1" min="-1" max="16"> <span style="opacity:.6">-1 = auto, 0 = none</span></label>
   <label><input type="checkbox" id="oUse"> Use policy (watch it)</label>
   <label><input type="checkbox" id="oReflex" checked> Balance reflex</label>
-  <label><input type="checkbox" id="oStep" checked> Step reflex: legs out when falling</label>
+  <label><input type="checkbox" id="oBal2" checked> New balance + recovery steps</label>
+  <label><input type="checkbox" id="oStep" checked> Old step reflex (if New balance off)</label>
   <label><input type="checkbox" id="oFall"> Fall &amp; landing reflex (experimental)</label>
   <label><input type="checkbox" id="oSmooth" checked> Train for smooth, human-like motion</label>
   <label><input type="checkbox" id="oSoft" checked> Soft start: ease into standing</label>

@@ -27,6 +27,9 @@ on:
       soft:
         description: 'Soft start: ease into standing after spawning (true/false)'
         default: 'true'
+      bal2:
+        description: 'New balance: trunk upright + recovery steps (true/false)'
+        default: 'true'
 
 permissions:
   contents: write
@@ -51,6 +54,7 @@ jobs:
           RESUME: ${{ inputs.resume }}
           SMOOTH: ${{ inputs.smooth }}
           SOFT: ${{ inputs.soft }}
+          BAL2: ${{ inputs.bal2 }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
