@@ -113,7 +113,7 @@ var RS=(function(){
     var soft=FLAGS.soft&&Math.abs(ra)<0.3&&(o.h||0)<0.05,tgt0=new Float64Array(NJ); // soft start (only when spawned upright on the feet): PD targets begin at the spawn pose
     if(soft)for(i=0;i<NJ;i++)tgt0[i]=pose[i];
     return {parts:bodies,feet:feet,ctrls:ctrls,stiff:new Float64Array(NJ).fill(1),tgt:tgt0,age:soft?0:1e9,prevO:new Float64Array(NO),prevO2:new Float64Array(NO),prevW:new Float64Array(NJ),
-      lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:new Float64Array(NJ).fill(1),fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},dh:[],dp:new Float64Array([1,0,0,0,0]),wph:0,st2:{ph:0,t:0,leg:0,next:0,calm:0,x0:0,xl:0,Ts:0.25,clr:0.09,dir:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
+      lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:new Float64Array(NJ).fill(1),fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},dh:[],dp:new Float64Array([1,0,0,0,0]),wph:0,wph2:0,lph:0,wsg:1,b2ok:false,nz:new Float64Array(10),nr:rngMake(12345),st2:{ph:0,t:0,leg:0,next:0,calm:0,x0:0,xl:0,Ts:0.25,clr:0.09,dir:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
   }
 
   // PD: torque = kp*(target-angle) - kd*angularVelocity, clamped. Per-joint stiffness scales kp, kd, and the torque cap.
@@ -370,18 +370,65 @@ var RS=(function(){
     return rig.dp;
   }
   // reactions driven by the detector's guess (arms + neck only; legs stay with the balance/step controller)
+  // Reactions are driven by the detector's guess, and by what the body is actually doing right now (trunk spin,
+  // contact), with smooth random variation so no two falls look the same:
+  //  falling / being moved -> arms windmill in the direction the body is tipping (that's what fights the rotation),
+  //   unevenly and out of step with each other; legs kick and bicycle when the feet are off the ground, and scramble
+  //   for footing once the balance controller has given up;  stumbling -> arms come up a little;
+  //  about to hit the ground -> hands reach toward it, chin tucks.
+  function ou(rig,k,dt,tau){ // smooth random signal, unit size, ~tau s correlation
+    var n=rig.nz;n[k]+=-n[k]*dt/tau+Math.sqrt(2*dt/tau)*gauss(rig.nr);return n[k];
+  }
   function nnReact(rig,tt,dt){
-    var p=rig.dp,ps=rig.parts,hy=ps[0].getPosition().y,ca=wrap(ps[1].getAngle());
-    var wave=Math.min(1,Math.max(0,(Math.max(p[2],p[3])-0.35)/0.4)),bal=Math.min(1,Math.max(0,(p[1]-0.3)/0.4));
-    var brace=p[2]>0.5&&hy<1.25&&hy>0.5; // about to hit the ground: hands go out toward it
-    rig.wph+=dt*2*Math.PI*(2.0+0.8*wave);
-    var w=rig.wph,dir=(-ca+2*rig.e)>0?1:-1;
-    var sF=0.25+0.35*bal+1.2*wave*Math.sin(w)+1.0*wave,sN=0.25+0.35*bal+1.2*wave*Math.sin(w+Math.PI*0.9)+1.0*wave;
-    var eF=0.3+0.7*wave*(0.5+0.5*Math.sin(w+1.2)),eN=0.3+0.7*wave*(0.5+0.5*Math.sin(w+1.2+Math.PI*0.9));
-    if(brace){sF=sN=dir>0?1.3:-0.9;eF=eN=0.4;tt[0]=-0.35;}
-    var mix=Math.max(wave,bal,brace?1:0);
-    tt[3]=tt[3]*(1-mix)+sF*mix;tt[9]=tt[9]*(1-mix)+sN*mix;tt[4]=tt[4]*(1-mix)+eF*mix;tt[10]=tt[10]*(1-mix)+eN*mix;
-    tt[5]=tt[5]*(1-mix)+0.3*wave*Math.sin(w*1.3)*mix;tt[11]=tt[11]*(1-mix)+0.3*wave*Math.sin(w*1.3+1)*mix;
+    var p=rig.dp,ps=rig.parts,hy=ps[0].getPosition().y,ca=wrap(ps[1].getAngle()),om=ps[1].getAngularVelocity();
+    var fallP=Math.min(1,Math.max(0,(p[2]-0.35)/0.4)),movP=Math.min(1,Math.max(0,(p[3]-0.35)/0.4)),stP=Math.min(1,Math.max(0,(p[1]-0.3)/0.4));
+    var lying=hy<0.65||lowY(ps[3])<0.06||lowY(ps[1])<0.06; // torso on the ground: done flailing, just settle
+    var wild=lying?0:Math.max(fallP,movP),dir=(-ca+2*rig.e)>0?1:-1,k;
+    if(lying){ // down: go loose and let the knees and hips fold, instead of holding stiff poses (no balancing on the head)
+      stP=0;for(k=0;k<NJ;k++)rig.stiff[k]=Math.min(rig.stiff[k],0.3);
+      tt[6]+=0.5;tt[12]+=0.4;tt[7]-=0.8;tt[13]-=0.7;
+    }
+    var n=[];for(k=0;k<10;k++)n.push(ou(rig,k,dt,k<6?0.22:0.35));
+    // ---- arms ----
+    var spin=clampA(om/2.5,1);                                  // + = tipping backward (counter-clockwise)
+    var rate=2*Math.PI*(1.1+1.6*Math.abs(spin)+0.9*movP+0.35*n[0]);
+    var sgn=Math.abs(spin)>0.15?(spin>0?1:-1):(rig.wsg||1);rig.wsg=sgn;   // windmill the same way the body tips
+    rig.wph+=dt*rate*sgn;rig.wph2+=dt*rate*sgn*(1+0.25*n[1]);         // the two arms drift in and out of step
+    var A=1.0+0.35*n[2],c0=1.0+0.4*movP+0.3*n[3];
+    var sF=c0+A*Math.sin(rig.wph)-0.5*spin,sN=c0+(A*(0.85+0.2*n[4]))*Math.sin(rig.wph2+2.2)-0.5*spin;
+    var eF=0.25+0.9*(0.5+0.5*Math.sin(rig.wph+1.4+0.4*n[5])),eN=0.25+0.9*(0.5+0.5*Math.sin(rig.wph2+3.6));
+    // stumbling: arms come up a little, unevenly (bigger arm swings here cost balance: measured)
+    var bF=0.3+0.1*n[2],bN=0.22+0.1*n[4],beF=0.45+0.1*n[5],beN=0.5+0.1*n[3];
+    var aF,aN,aeF,aeN,mix=Math.max(wild,stP);
+    aF=tt[3];aN=tt[9];aeF=tt[4];aeN=tt[10];
+    if(mix>0){var wW=wild/(wild+stP+1e-9);aF=sF*wW+bF*(1-wW);aN=sN*wW+bN*(1-wW);aeF=eF*wW+beF*(1-wW);aeN=eN*wW+beN*(1-wW);}
+    var brace=p[2]>0.5&&hy<1.2&&hy>0.45&&!(rig.fc[0]&&rig.fc[1]&&rig.b2ok);
+    if(brace){aF=(dir>0?1.35:-0.9)+0.2*n[2];aN=(dir>0?1.2:-0.8)+0.2*n[4];aeF=0.35;aeN=0.45;mix=1;tt[0]=-0.35;}
+    // hands on the ground (or lying): elbows give and the arms go soft, so they cushion instead of pole-vaulting the body over
+    var handDown=lowY(ps[HAND_IDX[0]])<0.05||lowY(ps[HAND_IDX[1]])<0.05;
+    if((handDown&&!rig.b2ok)||lying){
+      if(brace||handDown){aeF=aeN=1.3;mix=1;}
+      for(k=3;k<6;k++){rig.stiff[k]=Math.min(rig.stiff[k],0.35);rig.stiff[k+6]=Math.min(rig.stiff[k+6],0.35);}
+    }
+    if(mix>0){
+      tt[3]=tt[3]*(1-mix)+aF*mix;tt[9]=tt[9]*(1-mix)+aN*mix;tt[4]=tt[4]*(1-mix)+aeF*mix;tt[10]=tt[10]*(1-mix)+aeN*mix;
+      tt[5]+=0.35*wild*n[6];tt[11]+=0.35*wild*n[7];
+      tt[0]+=0.12*wild*n[8];
+    }
+    // ---- legs: only when the balance controller isn't using them ----
+    if(rig.b2ok||wild<=0)return;
+    var air=true;for(k=0;k<ps.length;k++)if(lowY(ps[k])<0.05){air=false;break;} // nothing touching the ground
+    rig.lph+=dt*2*Math.PI*(1.4+0.6*movP+0.3*n[9]);
+    var L=LEGK,lp=rig.lph;
+    if(air){ // kicking / bicycling, uneven
+      tt[L[0][0]]+=wild*(0.35+0.55*Math.sin(lp)+0.2*n[0]);tt[L[0][1]]+=wild*(-0.7-0.5*(0.5+0.5*Math.sin(lp+1.3)));
+      tt[L[1][0]]+=wild*(0.35+0.55*Math.sin(lp+2.8+0.5*n[1])+0.2*n[3]);tt[L[1][1]]+=wild*(-0.7-0.5*(0.5+0.5*Math.sin(lp+4.0)));
+      tt[L[0][2]]+=0.3*wild*n[6];tt[L[1][2]]+=0.3*wild*n[7];
+    }else if(hy>0.8){ // feet down but past saving: scramble a leg out toward the fall, knees give
+      var lead=Math.sin(lp*0.5)>0?0:1;
+      tt[L[lead][0]]+=wild*(dir>0?0.8:-0.45);tt[L[lead][1]]+=wild*-0.45;
+      tt[L[1-lead][1]]+=wild*-0.6;tt[L[1-lead][0]]+=wild*0.25;
+    }
   }
 
   // run the policy: stiffness + filtered PD targets, with a fixed balance reflex underneath (only when upright on the feet)
@@ -434,9 +481,9 @@ var RS=(function(){
       else if(k===0)t+=neck;else if(k===3||k===9)t+=sh;else if(k===4||k===10)t+=el;
       tt[k]=t;
     }
-    if(rf&&FLAGS.bal2)bal2(rig,tt,out,ca,dt);
+    rig.b2ok=rf&&FLAGS.bal2?bal2(rig,tt,out,ca,dt):false;
+    if(rf&&!FLAGS.bal2&&FLAGS.step)stepReflex(rig,tt,ca,dt);
     if(rf&&FLAGS.nn)nnReact(rig,tt,dt);
-    else if(rf&&FLAGS.step)stepReflex(rig,tt,ca,dt);
     // target smoothing: the network can slow it down (smoother) or speed it up; soft start eases in after spawning
     var al=clampA(FILT*(1+0.6*out[O_FILT]),1);
     if(rig.age<FLAGS.softT){var x=rig.age/FLAGS.softT;al*=0.04+0.96*x*x*(3-2*x);}
