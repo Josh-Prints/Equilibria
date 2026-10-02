@@ -1,7 +1,7 @@
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:15,crushLimb:1.25,ripImp:1.6,shatter:1,strands:1,groggyT:5,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:14,crushLimb:1,ripImp:1.6,shatter:1,strands:1,groggyT:5,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -565,11 +565,13 @@ var RS=(function(){
   function impacts(rig){
     var ps=rig.parts,n=ps.length,k;
     if(!rig.cpv)rig.cpv=new Float64Array(2*n);
-    rig.impS=0;if(!rig.impB)rig.impB=new Float64Array(n);
+    rig.impS=0;if(!rig.impB){rig.impB=new Float64Array(n);rig.impV=new Float64Array(n);rig.gnd=new Uint8Array(n);}
     var it=0,id=0,live=(rig.ticks=(rig.ticks||0)+1)>12; // ignore the settle right after spawning
     for(k=0;k<n;k++){
       var v=ps[k].getLinearVelocity(),d=0;
-      if(live&&onGround(ps[k]))d=Math.hypot(v.x-rig.cpv[2*k],v.y-rig.cpv[2*k+1]);
+      var g=onGround(ps[k]);if(live&&g)d=Math.hypot(v.x-rig.cpv[2*k],v.y-rig.cpv[2*k+1]);
+      // impact speed (for crushing): how fast this part was going into the floor the moment it hit, in m/s
+      rig.impV[k]=live&&g?Math.max(d,rig.gnd[k]?0:-rig.cpv[2*k+1]):0;rig.gnd[k]=g?1:0;
       rig.cpv[2*k]=v.x;rig.cpv[2*k+1]=v.y;
       rig.impB[k]=d;if(d>2.5)ev(rig,'hit',k,d);
       if(k===0)rig.impH=d;
@@ -708,13 +710,15 @@ var RS=(function(){
   // broken bones a little. Under 45% it passes out, under 20% it's dead.
   // per-part crush thresholds (upper arm, forearm, hand, thigh, shin, foot): big parts barely change speed when they
   // hit (the rest of the body carries them), hands and feet slam hard, so each is set so all get crushed about as often
-  var CRUSHL=[4,7,11,5,4.5,11];
+  // real-world impact speeds (m/s) that shatter each part (comminuted / crushed, not just a crack), roughly from
+  // fall and crash data: upper arm 13, forearm 11, hand 11, thigh 17 (femur, strongest), shin 13, foot 12; head 14
+  var CRUSHL=[13,11,11,17,13,12];
   function crushBleed(rig,dt){
     var I=injOf(rig),ps=rig.parts,k;
     if(FLAGS.crush&&I.t>0.2&&rig.impB){
       for(k=0;k<ps.length;k++){
         var lim=k===0?FLAGS.crushImp:k<4?1e9:CRUSHL[(k-4)%6]*FLAGS.crushLimb;
-        var d=rig.impB[k];if(!(d>lim))continue;
+        var d=rig.impV[k];if(!(d>lim))continue;
         if(k===0){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crush',0,d);}continue;}
         if(k<4)continue;
         var j=k-1;if(I.gone[j])continue;

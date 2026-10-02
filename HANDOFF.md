@@ -230,3 +230,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.4
 - Josh asked for no limits on people or blood: MAXR and MAXP are Infinity and floor stains are never dropped. (Per-part splat cap of 18 stays: extra splats grow existing ones, so no blood is lost; cullChunks(50) still clears old shattered pieces.)
+
+## v0.2.5
+- Crushing now uses each part's real impact speed into the floor (`rig.impV`: speed going in at first touch, or the velocity change if bigger) against real-world shatter speeds in m/s: upper arm 13, forearm 11, hand 11, thigh 17, shin 13, foot 12, head 14 (FLAGS.crushLimb=1, crushImp=14). The crush slider is a multiplier: value/7, so the default 7 is real-world.
