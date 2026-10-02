@@ -210,3 +210,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.1.18
 - Fix: when a part that already had strings tied to it (e.g. a forearm whose hand was torn off) got crushed and shattered, the strings stayed tied to the empty space where the far end used to be, so the hand hung off nothing and the drawn string stopped short. `shatter` now re-ties each existing string to whichever piece holds its end (clamped onto the piece).
+
+## v0.2.0
+- Minor version bump covering the v0.1.x gore/injury work (pass-out, crying, strands, shatter, soft broken-joint limits, liquid streams, spreading blood).
