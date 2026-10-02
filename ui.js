@@ -333,6 +333,11 @@
     var fg=getComputedStyle(document.body).color;
     ctx.strokeStyle=fg;ctx.fillStyle=fg;ctx.lineWidth=2;
     var gy=toScreen(Vec2(0,0)).y;
+    var g0=toWorld(0,H),g1=toWorld(W,0),gx,gyy; // 1 m grid
+    ctx.save();ctx.globalAlpha=0.15;ctx.lineWidth=1;ctx.beginPath();
+    for(gx=Math.ceil(g0.x);gx<=g1.x;gx++){var sx=toScreen(Vec2(gx,0)).x;ctx.moveTo(sx,0);ctx.lineTo(sx,H);}
+    for(gyy=Math.ceil(g0.y);gyy<=g1.y;gyy++){var sy=toScreen(Vec2(0,gyy)).y;ctx.moveTo(0,sy);ctx.lineTo(W,sy);}
+    ctx.stroke();ctx.restore();
     ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();
     if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;drawBodies(false);}
     if(opt('oNN')&&RS.hasDet()){ // what the network thinks is happening, above each head

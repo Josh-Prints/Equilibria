@@ -29,6 +29,7 @@ details button{font-size:14px;padding:8px 12px}
 <body>
 <canvas id="c"></canvas>
 <div id="panels">
+<div hidden><!-- training, policy and behaviour switches: off the page; behaviours stay on (checked) -->
 <details id="trn" open>
   <summary>Train (evolution strategies)</summary>
   <div class="row"><button id="bTrain">Start training</button><button id="bResetP">Reset policy</button><button id="bTest">Test</button></div>
@@ -45,13 +46,11 @@ details button{font-size:14px;padding:8px 12px}
   <label><input type="checkbox" id="oReflex" checked> Balance reflex</label>
   <label><input type="checkbox" id="oBal2" checked> New balance + recovery steps</label>
   <label><input type="checkbox" id="oStep" checked> Old step reflex (if New balance off)</label>
-  <label><input type="checkbox" id="oFall"> Fall &amp; landing reflex (experimental)</label>
+  <label><input type="checkbox" id="oFall" checked> Fall &amp; landing reflex (experimental)</label>
   <label><input type="checkbox" id="oSmooth" checked> Train for smooth, human-like motion</label>
   <label><input type="checkbox" id="oSoft" checked> Soft start: ease into standing</label>
   <div class="row"><button id="bSave">Save file</button><button id="bLoad">Load file</button></div>
   <input type="file" id="fIn" accept=".json,application/json" style="display:none">
-  <div class="row"><button id="pL">&#9664; Push</button><button id="pR">Push &#9654;</button></div>
-  <label>Strength <input type="range" id="pS" min="0.1" max="3" step="0.1" value="1" style="width:110px;height:auto"></label>
 </details>
 <details id="injp">
   <summary>Injuries</summary>
@@ -70,8 +69,11 @@ details button{font-size:14px;padding:8px 12px}
   </table>
   <div class="row"><button id="bBreakAll">Break all</button><button id="bHealAll">Heal all</button></div>
 </details>
+</div>
 <details id="dbg">
   <summary>Debug</summary>
+  <div class="row"><button id="pL">&#9664; Push</button><button id="pR">Push &#9654;</button></div>
+  <label>Strength <input type="range" id="pS" min="0.1" max="3" step="0.1" value="1" style="width:110px;height:auto"></label>
   <label><input type="checkbox" id="oBox" checked> Boxes</label>
   <label><input type="checkbox" id="oSkel"> Skeleton</label>
   <label><input type="checkbox" id="oJoint"> Joints</label>
@@ -1268,6 +1270,11 @@ var RS=(function(){
     var fg=getComputedStyle(document.body).color;
     ctx.strokeStyle=fg;ctx.fillStyle=fg;ctx.lineWidth=2;
     var gy=toScreen(Vec2(0,0)).y;
+    var g0=toWorld(0,H),g1=toWorld(W,0),gx,gyy; // 1 m grid
+    ctx.save();ctx.globalAlpha=0.15;ctx.lineWidth=1;ctx.beginPath();
+    for(gx=Math.ceil(g0.x);gx<=g1.x;gx++){var sx=toScreen(Vec2(gx,0)).x;ctx.moveTo(sx,0);ctx.lineTo(sx,H);}
+    for(gyy=Math.ceil(g0.y);gyy<=g1.y;gyy++){var sy=toScreen(Vec2(0,gyy)).y;ctx.moveTo(0,sy);ctx.lineTo(W,sy);}
+    ctx.stroke();ctx.restore();
     ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();
     if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;drawBodies(false);}
     if(opt('oNN')&&RS.hasDet()){ // what the network thinks is happening, above each head
