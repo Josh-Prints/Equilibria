@@ -137,7 +137,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bClean">Clean up blood</button>
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
-  <div class="ver">beta v0.1.9</div>
+  <div class="ver">beta v0.1.10</div>
 </div>
 
 <div id="splash">
@@ -145,7 +145,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <div><span class="tag">BETA</span></div>
   <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
   <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
-  <div class="ver">beta v0.1.9</div>
+  <div class="ver">beta v0.1.10</div>
   <button id="bPlay">Play</button>
   <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sGore" class="tg sm">Blood &amp; gore: on</button></div>
 </div>
@@ -774,8 +774,9 @@ var RS=(function(){
     var j=rig.ctrls[k].j,rj=j._r||j,w=rj.getBodyA().getWorld(),A=rj.getBodyA(),B=rj.getBodyB(),la=rj.getLocalAnchorA(),lb=rj.getLocalAnchorB();
     w.destroyJoint(rj);
     if(FLAGS.strands){ // still hanging on by strands of muscle, tendon and gut: they stretch under a pull and snap
-      var L0=0.16,rp=w.createJoint(planck.RopeJoint({maxLength:L0,localAnchorA:Vec2(la.x,la.y),localAnchorB:Vec2(lb.x,lb.y)},A,B));
-      (rig.strands||(rig.strands=[])).push({j:rp,k:k,A:A,B:B,la:Vec2(la.x,la.y),lb:Vec2(lb.x,lb.y),L:L0,max:0.35+0.25*Math.random(),n:2+(Math.random()*3|0),seed:Math.random()*6.28});
+      var wt=0;KIDS[k].forEach(function(q){if(!I.gone[q])wt+=rig.parts[q+1].getMass()*10;}); // weight of what's hanging off it
+      var L0=0.06,rp=w.createJoint(planck.RopeJoint({maxLength:L0,localAnchorA:Vec2(la.x,la.y),localAnchorB:Vec2(lb.x,lb.y)},A,B));
+      (rig.strands||(rig.strands=[])).push({j:rp,k:k,A:A,B:B,la:Vec2(la.x,la.y),lb:Vec2(lb.x,lb.y),L:L0,max:0.3+0.15*Math.random(),wt:Math.max(5,wt),fs:0,n:2+(Math.random()*3|0),seed:Math.random()*6.28});
     }
     KIDS[k].forEach(function(q){I.gone[q]=1;I.broken[q]=0;});
     ev(rig,'sever',k);
@@ -826,8 +827,9 @@ var RS=(function(){
     var S=rig.strands;if(!S)return;
     for(var i=S.length-1;i>=0;i--){
       var s=S[i],f=0;try{var F=s.j.getReactionForce(1/DT);f=Math.hypot(F.x,F.y)||0;}catch(e){} // (planck throws before its first step)
-      s.f=f;if(f>25)s.L+=Math.min(0.6,(f-25)/250)*dt;
-      if(s.L>=s.max){s.j.getBodyA().getWorld().destroyJoint(s.j);S.splice(i,1);ev(rig,'snap',s.k);}
+      // only just holds the limb's own weight: it sags under it, any real tug (or a jolt) snaps it
+      s.fs+=(f-s.fs)*0.06;s.f=f;if(s.fs>0.7*s.wt)s.L+=Math.min(1,(s.fs-0.7*s.wt)/(2*s.wt))*dt;
+      s.age=(s.age||0)+dt;if(s.L>=s.max||(s.fs>1.8*s.wt&&s.age>0.3)){s.j.getBodyA().getWorld().destroyJoint(s.j);S.splice(i,1);ev(rig,'snap',s.k,s.fs/s.wt);}
       else s.j.setMaxLength(s.L);
     }
   }
