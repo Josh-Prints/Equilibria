@@ -1,0 +1,58 @@
+03:13:10  cpus=4 workers=4 pairs=16 scenarios=3 sigma=0.01 lr=0.004 mode=full bal2=1 smooth=1 soft=1 minutes=20
+03:13:13  baseline (reflexes, no network): stand 361 · push 335 · drop 136 · fallen 162  | total 995
+03:13:43  gen 10  2.98 s/gen  mean 227 best 350
+03:14:19  gen 20  3.32 s/gen  mean 287 best 294
+03:14:21  TEST gen 20: stand 360 · push 335 · drop 91 · fallen 139  | total 926  (baseline total 995)  <- best so far, saved
+03:14:58  gen 30  3.52 s/gen  mean 145 best 203
+03:15:31  gen 40  3.46 s/gen  mean 217 best 312
+03:15:33  TEST gen 40: stand 357 · push 340 · drop 66 · fallen 121  | total 885  (baseline total 995)
+03:16:04  gen 50  3.42 s/gen  mean 208 best 318
+03:16:31  gen 60  3.30 s/gen  mean 143 best 260
+03:16:33  TEST gen 60: stand 353 · push 364 · drop -14 · fallen 102  | total 804  (baseline total 995)
+03:17:04  gen 70  3.30 s/gen  mean 324 best 428
+03:17:36  gen 80  3.29 s/gen  mean 180 best 413
+03:17:37  TEST gen 80: stand 354 · push 307 · drop 63 · fallen 133  | total 857  (baseline total 995)
+03:18:04  gen 90  3.23 s/gen  mean 141 best 382
+03:18:37  gen 100  3.24 s/gen  mean 394 best 469
+03:18:38  TEST gen 100: stand 353 · push 329 · drop 64 · fallen 135  | total 880  (baseline total 995)
+03:19:12  gen 110  3.26 s/gen  mean 158 best 225
+03:19:46  gen 120  3.27 s/gen  mean 254 best 370
+03:19:47  TEST gen 120: stand 344 · push 196 · drop 2 · fallen 130  | total 672  (baseline total 995)
+03:20:14  gen 130  3.24 s/gen  mean 371 best 434
+03:20:42  gen 140  3.21 s/gen  mean 234 best 308
+03:20:44  TEST gen 140: stand 338 · push 336 · drop 44 · fallen 119  | total 837  (baseline total 995)
+03:21:12  gen 150  3.19 s/gen  mean 242 best 316
+03:21:45  gen 160  3.20 s/gen  mean 181 best 351
+03:21:46  TEST gen 160: stand 350 · push 300 · drop 120 · fallen 117  | total 887  (baseline total 995)
+03:22:14  gen 170  3.18 s/gen  mean 264 best 283
+03:22:35  gen 180  3.12 s/gen  mean 236 best 240
+03:22:37  TEST gen 180: stand 351 · push 362 · drop 76 · fallen 118  | total 906  (baseline total 995)
+03:23:09  gen 190  3.14 s/gen  mean 93 best 120
+03:23:37  gen 200  3.12 s/gen  mean 301 best 337
+03:23:39  TEST gen 200: stand 347 · push 256 · drop 43 · fallen 133  | total 779  (baseline total 995)
+03:24:11  gen 210  3.14 s/gen  mean 288 best 301
+03:24:37  gen 220  3.11 s/gen  mean 290 best 315
+03:24:39  TEST gen 220: stand 349 · push 229 · drop -52 · fallen 118  | total 644  (baseline total 995)
+03:25:06  gen 230  3.10 s/gen  mean 33 best 233
+03:25:38  gen 240  3.11 s/gen  mean 227 best 374
+03:25:40  TEST gen 240: stand 347 · push 249 · drop -111 · fallen 119  | total 604  (baseline total 995)
+03:26:14  gen 250  3.12 s/gen  mean 95 best 214
+03:26:47  gen 260  3.13 s/gen  mean 305 best 360
+03:26:48  TEST gen 260: stand 343 · push 242 · drop 40 · fallen 134  | total 759  (baseline total 995)
+03:27:16  gen 270  3.12 s/gen  mean 242 best 368
+03:27:54  gen 280  3.15 s/gen  mean 233 best 294
+03:27:55  TEST gen 280: stand 339 · push 245 · drop 69 · fallen 126  | total 779  (baseline total 995)
+03:28:24  gen 290  3.14 s/gen  mean 162 best 262
+03:28:53  gen 300  3.14 s/gen  mean 165 best 379
+03:28:55  TEST gen 300: stand 343 · push 269 · drop 22 · fallen 125  | total 759  (baseline total 995)
+03:29:29  gen 310  3.15 s/gen  mean 125 best 309
+03:30:04  gen 320  3.16 s/gen  mean 163 best 271
+03:30:05  TEST gen 320: stand 344 · push 353 · drop -47 · fallen 124  | total 774  (baseline total 995)
+03:30:32  gen 330  3.15 s/gen  mean 177 best 263
+03:31:07  gen 340  3.16 s/gen  mean 207 best 242
+03:31:09  TEST gen 340: stand 343 · push 346 · drop 17 · fallen 124  | total 830  (baseline total 995)
+03:31:38  gen 350  3.16 s/gen  mean 209 best 247
+03:32:15  gen 360  3.17 s/gen  mean 179 best 291
+03:32:16  TEST gen 360: stand 342 · push 353 · drop 106 · fallen 120  | total 921  (baseline total 995)
+03:32:48  gen 370  3.18 s/gen  mean 153 best 281
+03:33:18  time limit reached
