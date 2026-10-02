@@ -9,7 +9,8 @@ const os=require('os'),fs=require('fs');
 
 var RS=(function(){
   'use strict';
-  var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+  var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -121,7 +122,7 @@ var RS=(function(){
     var soft=FLAGS.soft&&Math.abs(ra)<0.3&&(o.h||0)<0.05,tgt0=new Float64Array(NJ); // soft start (only when spawned upright on the feet): PD targets begin at the spawn pose
     if(soft)for(i=0;i<NJ;i++)tgt0[i]=pose[i];
     return {parts:bodies,feet:feet,ctrls:ctrls,stiff:new Float64Array(NJ).fill(1),tgt:tgt0,age:soft?0:1e9,prevO:new Float64Array(NO),prevO2:new Float64Array(NO),prevW:new Float64Array(NJ),
-      lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:new Float64Array(NJ).fill(1),fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
+      lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:new Float64Array(NJ).fill(1),fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},st2:{ph:0,t:0,leg:0,next:0,calm:0,x0:0,xl:0,Ts:0.25,clr:0.09,dir:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
   }
 
   // PD: torque = kp*(target-angle) - kd*angularVelocity, clamped. Per-joint stiffness scales kp, kd, and the torque cap.
@@ -277,6 +278,72 @@ var RS=(function(){
     if(!upright&&hy<0.9)st.ph=0; // fell anyway
   }
 
+  // ---- balance v2 (FLAGS.bal2): SIMBICON-style stepping that catches real shoves ----
+  // Standing legs hold the trunk upright in WORLD frame (hip torque), leaning a little into the fall like a person;
+  // ankles keep the feet flat and push the capture point back over the feet. When the capture point leaves the feet
+  // (FLAGS.trig2 past toe/heel) the rear leg swings to just beyond it, then the other leg if that wasn't enough.
+  // Once settled, the trailing foot is brought back beside the front one. Reflexes keep fighting down to a 55 deg tilt.
+  // st2.ph: 0 standing, 1 swinging, 2 landed (double support), 3 bringing the trailing foot in
+  var SHIN=[IDX.shf,IDX.shn];
+  function ankleX(rig,l){return rig.ctrls[LEGK[l][2]].j.getAnchorA().x;}
+  function begin2(rig,l,xl,Ts,clr,dir){var s=rig.st2;s.ph=dir?1:3;s.leg=l;s.t=0;s.x0=ankleX(rig,l);s.xl=xl;s.Ts=Ts;s.clr=clr;s.dir=dir;}
+  function bal2(rig,tt,out,ca,dt){
+    var s=rig.st2,ps=rig.parts,hy=ps[0].getPosition().y,pa=wrap(ps[3].getAngle()),pw=ps[3].getAngularVelocity();
+    var ok=Math.cos(ca)>0.55&&hy>1.1&&(rig.com.contact||s.ph===1);
+    if(!ok){s.ph=0;s.calm=0;return false;}
+    var e=rig.e,xi=rig.xi,k,l;
+    s.t+=dt;
+    // lean into the fall (hip strategy, not mid-swing), then hold the trunk upright in world frame with the stance hips
+    var pdes=s.ph===1?0:clampA(-FLAGS.lean2*e,0.3),gain=FLAGS.trunk2;
+    // which way the capture point has gone, and by how much
+    var out2=xi>rig.hi+FLAGS.trig2?1:(xi<rig.lo-FLAGS.trig2?-1:0);
+    if(s.ph===0||s.ph===2){
+      if(s.ph===2&&s.t<0.12)out2=0; // let the landing settle for a moment
+      if(out2){
+        // swing the foot that is behind (relative to the fall); tie -> alternate
+        var a0=ankleX(rig,0),a1=ankleX(rig,1),lg=Math.abs(a0-a1)<0.03?s.next:(out2>0?(a0<a1?0:1):(a0>a1?0:1));
+        s.next=1-lg;
+        var hipX=rig.ctrls[LEGK[lg][0]].j.getAnchorA().x,xl=xi+out2*FLAGS.off2;
+        xl=Math.max(hipX-FLAGS.max2,Math.min(hipX+FLAGS.max2,xl));
+        begin2(rig,lg,xl,FLAGS.Ts2,FLAGS.clear2,out2);
+      }else if(s.ph===2){
+        s.calm=(Math.abs(e)<0.06&&Math.abs(rig.com.vx)<0.15)?s.calm+dt:0;
+        if(s.calm>0.5){ // settled: bring the trailing foot back beside the front one
+          var b0=ankleX(rig,0),b1=ankleX(rig,1),cx=rig.com.x;
+          if(Math.abs(b0-b1)>0.1){var tl=Math.abs(b0-cx)>Math.abs(b1-cx)?0:1;begin2(rig,tl,(tl?b0:b1)+0.0,0.45,0.05,0);}
+          else{s.ph=0;}
+          s.calm=0;
+        }
+      }
+    }
+    var sw=(s.ph===1||s.ph===3)?s.leg:-1;
+    if(sw>=0){
+      var x=Math.min(1,s.t/s.Ts),sm=x*x*(3-2*x);
+      if(s.ph===1){ // keep tracking the capture point while in the air
+        var hx=rig.ctrls[LEGK[sw][0]].j.getAnchorA().x,want=xi+s.dir*FLAGS.off2;
+        want=Math.max(hx-FLAGS.max2,Math.min(hx+FLAGS.max2,want));
+        s.xl+=(want-s.xl)*0.15;
+      }
+      var hip=rig.ctrls[LEGK[sw][0]].j.getAnchorA();
+      legIK(hip.x,hip.y,s.x0+(s.xl-s.x0)*sm,0.10+s.clr*Math.sin(Math.PI*x),pa,IKO);
+      for(k=0;k<3;k++)tt[LEGK[sw][k]]=IKO[k]+out[LEGK[sw][k]]*ASC[LEGK[sw][k]]*0.3;
+      if((x>0.55&&rig.fc[sw])||s.t>s.Ts*1.8){
+        if(s.ph===3){s.ph=0;}else{s.ph=2;}
+        s.t=0;s.calm=0;
+      }
+    }
+    // stance legs: trunk control at the hip, knee nearly straight, foot flat + ankle push toward the support
+    var nst=(sw<0?2:1),tA=clampA(-FLAGS.ank2*e,0.5)*(1+out[O_RFA]);
+    for(l=0;l<2;l++){
+      if(l===sw)continue;
+      var K=LEGK[l],hj=rig.ctrls[K[0]].j.getJointAngle();
+      tt[K[0]]=hj+(gain*(pa-pdes)+0.02*pw)*(2/nst)*0.5*(1+out[O_RFH])+out[K[0]]*ASC[K[0]]*0.3;
+      tt[K[1]]=-0.06+out[K[1]]*ASC[K[1]];
+      tt[K[2]]=clampA(-wrap(ps[SHIN[l]].getAngle()),0.7)+tA+out[K[2]]*ASC[K[2]];
+    }
+    return true;
+  }
+
   // run the policy: stiffness + filtered PD targets, with a fixed balance reflex underneath (only when upright on the feet)
   function act(rig,theta,buf,rng,opt){
     opt=opt||{};
@@ -291,7 +358,7 @@ var RS=(function(){
     if(rf&&upright&&rig.com.contact){
       var e=rig.e,ae=Math.abs(e)-0.02;
       tA=clampA(-4*e,0.5)*(1+out[O_RFA]);
-      if(ae>0)tH=clampA((e>0?-1:1)*4*ae,0.7)*(1+out[O_RFH]);
+      if(ae>0&&!FLAGS.bal2)tH=clampA((e>0?-1:1)*4*ae,0.7)*(1+out[O_RFH]);
     }
     // ---- reflexes for things that go wrong: landing, losing balance, falling ----
     var sL=1,sS=1,sA=1,addK=0,addH=0,neck=0,sh=0,el=0,fall=false;
@@ -302,8 +369,8 @@ var RS=(function(){
       if(!FLAGS.land)rig.landT=0;
       if(rig.quiet>0)rig.quiet-=dt;
       if(rig.landT>0){rig.landT-=dt;sL=FLAGS.landSL;addH=FLAGS.landH;addK=FLAGS.landK;sS=0.6;}  // landing: go soft and crouch
-      var hy0=rig.parts[0].getPosition().y,stepping=rig.st.ph>0;
-      var lean=FLAGS.fall&&hy0>1.0&&!stepping&&rig.quiet<=0&&(Math.abs(ca)>FLAGS.fallA||rig.xi>rig.hi+FLAGS.fallE||rig.xi<rig.lo-FLAGS.fallE); // only while going down, and not while a step is trying to catch it
+      var hy0=rig.parts[0].getPosition().y,stepping=rig.st.ph>0||rig.st2.ph>0;
+      var lean=FLAGS.fall&&hy0>1.0&&!stepping&&!(FLAGS.bal2&&Math.cos(ca)>0.55&&hy0>1.1)&&rig.quiet<=0&&(Math.abs(ca)>FLAGS.fallA||rig.xi>rig.hi+FLAGS.fallE||rig.xi<rig.lo-FLAGS.fallE); // only while going down, and not while a step is trying to catch it
       if(lean&&!air&&rig.landT<=0){
         fall=true;
         var dir=(-ca+2*rig.e)>0?1:-1;           // which way it is going down: +1 forward
@@ -326,7 +393,8 @@ var RS=(function(){
       else if(k===0)t+=neck;else if(k===3||k===9)t+=sh;else if(k===4||k===10)t+=el;
       tt[k]=t;
     }
-    if(rf&&FLAGS.step)stepReflex(rig,tt,ca,dt);
+    if(rf&&FLAGS.bal2)bal2(rig,tt,out,ca,dt);
+    else if(rf&&FLAGS.step)stepReflex(rig,tt,ca,dt);
     // target smoothing: the network can slow it down (smoother) or speed it up; soft start eases in after spawning
     var al=clampA(FILT*(1+0.6*out[O_FILT]),1);
     if(rig.age<FLAGS.softT){var x=rig.age/FLAGS.softT;al*=0.04+0.96*x*x*(3-2*x);}
@@ -414,7 +482,8 @@ var RS=(function(){
       if(reactive){pose=1;legs=1;split=0;da=0;jv*=0.25;}
       var stand=0.3*up+0.25*pose+0.25*legs+0.2*hh,prog=0.25*hn*hn+0.15*Math.max(0,Math.cos(ca));
       var calm=Math.min(1,Math.max(0.15,(t-lastDist)/1.2));
-      var pen=calm*(2.0*split+2.0*da/NJ+1.0*jv/NJ+0.5*Math.abs(rig.com.vx)+1.0*Math.max(0,Math.abs(rig.com.x)-0.05)+0.1*eff/NJ);
+      // with bal2 the drift is measured from the feet, (while standing) so a recovery step that ends somewhere else isn't punished
+      var pen=calm*(2.0*split+2.0*da/NJ+1.0*jv/NJ+0.5*Math.abs(rig.com.vx)+1.0*Math.max(0,Math.abs(rig.com.x-(FLAGS.bal2&&rig.com.contact&&hy>1.2?(rig.lo+rig.hi)/2:0))-0.05)+0.1*eff/NJ);
       var hum=0;
       if(FLAGS.smooth){
         // smooth & human-like: penalise jerky commands and joint accelerations (twitching), hardest just after an upright start;
@@ -489,7 +558,7 @@ async function main(){
   const SIGMA=num('SIGMA',0.01),LR=num('LR',0.004),EVAL_EVERY=Math.round(num('EVAL_EVERY',20)),NP=RS.NP;
   const MODE=env.MODE||'full';                      // full = train every weight, out = output layer only
   const NW=Math.max(1,Math.round(num('WORKERS',os.cpus().length)));
-  const FLAGS={step:1,air:1,land:1,fall:1,           // all reflexes on, like the page default
+  const FLAGS={step:1,air:1,land:1,fall:1,bal2:env.BAL2==='false'?0:1, // all reflexes on, like the page default; bal2 = new balance + recovery steps
     smooth:env.SMOOTH==='false'?0:1,soft:env.SOFT==='false'?0:1}; // smooth/human-like reward and soft start (on unless set to false)
   const outDir=env.OUT||'out';fs.mkdirSync(outDir,{recursive:true});
   const logFile=outDir+'/log.txt';
@@ -509,7 +578,7 @@ async function main(){
     else log('resume.json has the wrong size, starting fresh');
   }
   if(num('MINUTES',330)>340)log('MINUTES capped at 340: GitHub stops a job at 6 hours, so longer runs would lose their results');
-  log('cpus='+os.cpus().length+' workers='+NW+' pairs='+P+' scenarios='+K+' sigma='+SIGMA+' lr='+LR+' mode='+MODE+' smooth='+FLAGS.smooth+' soft='+FLAGS.soft+' minutes='+MINUTES);
+  log('cpus='+os.cpus().length+' workers='+NW+' pairs='+P+' scenarios='+K+' sigma='+SIGMA+' lr='+LR+' mode='+MODE+' bal2='+FLAGS.bal2+' smooth='+FLAGS.smooth+' soft='+FLAGS.soft+' minutes='+MINUTES);
 
   const pool=[];for(let i=0;i<NW;i++)pool.push(new Worker(__filename));
   function runJobs(jobs){

@@ -26,6 +26,7 @@
   // TRAINING: evolution strategies, candidates evaluated in parallel Web Workers (main-thread fallback)
   // =====================================================================
   var ES={theta:RS.initParams(7),m:new Float64Array(NP),v:new Float64Array(NP),t:0,gen:0,hist:[],sigma:0.01,lr:0.004,pushMax:1.5,done:0,total:0};
+  var ZERO_TH=new Float64Array(NP); // untrained policy (all outputs 0): standing pose + reflexes
   function esReset(){ES.theta=RS.initParams(7);ES.m=new Float64Array(NP);ES.v=new Float64Array(NP);ES.t=0;ES.gen=0;ES.hist=[];ES.done=0;ES.total=0;}
 
   var pool={workers:[],ok:0,mode:'main',queue:[],pending:0};
@@ -83,8 +84,8 @@
   }
 
   // training and Test use whichever reflexes are ticked (a policy learns to work together with them)
-  function reflexCfg(){return {noReflex:!opt('oReflex'),flags:{step:opt('oStep')?1:0,air:opt('oFall')?1:0,land:opt('oFall')?1:0,fall:opt('oFall')?1:0,smooth:opt('oSmooth')?1:0,soft:opt('oSoft')?1:0}};}
-  function reflexText(){return (opt('oReflex')?('balance'+(opt('oStep')?', step':'')+(opt('oFall')?', fall/landing':'')):'none')+(opt('oSmooth')?' · smooth reward':'')+(opt('oSoft')?' · soft start':'');}
+  function reflexCfg(){return {noReflex:!opt('oReflex'),flags:{bal2:opt('oBal2')?1:0,step:opt('oStep')?1:0,air:opt('oFall')?1:0,land:opt('oFall')?1:0,fall:opt('oFall')?1:0,smooth:opt('oSmooth')?1:0,soft:opt('oSoft')?1:0}};}
+  function reflexText(){return (opt('oReflex')?('balance'+(opt('oBal2')?' v2 + steps':(opt('oStep')?', step':''))+(opt('oFall')?', fall/landing':'')):'none')+(opt('oSmooth')?' · smooth reward':'')+(opt('oSoft')?' · soft start':'');}
   var training=false;
   function esGeneration(){
     var P=Math.max(2,Math.round(num('nPairs',12))),K=Math.max(1,Math.round(num('nScen',2)));
@@ -378,9 +379,9 @@
       acc+=dt;
       var use=opt('oUse'),pd=opt('oPD'),reflex=opt('oReflex'),i;
       RS.FLAGS.air=RS.FLAGS.land=RS.FLAGS.fall=opt('oFall')?1:0;
-      RS.FLAGS.step=opt('oStep')?1:0;
+      RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;
       while(acc>=DT){
-        if(use&&stepCount%SUB===0)for(i=0;i<rigs.length;i++)RS.act(rigs[i],ES.theta,liveBufs[i],liveRng,{delay:1,noise:0.005,reflex:reflex});
+        if((use||reflex)&&stepCount%SUB===0)for(i=0;i<rigs.length;i++)RS.act(rigs[i],use?ES.theta:ZERO_TH,liveBufs[i],liveRng,{delay:1,noise:0.005,reflex:reflex}); // reflexes run even when the policy is off (untrained = zero weights)
         if(pd)for(i=0;i<rigs.length;i++)RS.pdRig(rigs[i]);
         applyDrag();world.step(DT,RS.VEL_IT,RS.POS_IT);acc-=DT;stepCount++;
       }
