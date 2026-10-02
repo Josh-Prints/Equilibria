@@ -12,7 +12,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--
 canvas#c{display:block;width:100%;height:100%;touch-action:none}
 #bar{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;justify-content:center;flex-wrap:wrap;padding:0 8px}
 button{font:600 15px system-ui,Arial,sans-serif;padding:11px 14px;border:0;border-radius:10px;background:var(--btn);color:var(--fg)}
-#hint{position:fixed;bottom:calc(112px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;font-size:12px;opacity:.7;pointer-events:none;padding:0 8px}
+#hint{position:fixed;bottom:calc(112px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;font-size:12px;opacity:.7;color:#dfe3e8;pointer-events:none;padding:0 8px}
 #panels{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));left:8px;display:flex;flex-direction:column;gap:6px;max-height:calc(100% - 150px);overflow:auto;max-width:calc(100% - 16px)}
 details{background:var(--panel);border-radius:10px;padding:6px 10px;font-size:14px;backdrop-filter:blur(6px)}
 summary{font-weight:600;padding:2px 0}
@@ -76,7 +76,7 @@ details button{font-size:14px;padding:8px 12px}
   <label>Strength <input type="range" id="pS" min="0.1" max="3" step="0.1" value="1" style="width:110px;height:auto"></label>
   <label><input type="checkbox" id="oGore" checked> Blood &amp; gore</label>
   <label><input type="checkbox" id="oSound" checked> Sound</label>
-  <label><input type="checkbox" id="oBox" checked> Boxes</label>
+  <label><input type="checkbox" id="oBox"> Boxes</label>
   <label><input type="checkbox" id="oSkel"> Skeleton</label>
   <label><input type="checkbox" id="oJoint"> Joints</label>
   <label><input type="checkbox" id="oCom"> COM &amp; support</label>
@@ -1413,20 +1413,31 @@ var RS=(function(){
       if(q.life<=0)parts.splice(i,1);
     }
   }
-  var groundPat=null;
-  function groundPattern(){ // dirt texture, made once
+  var groundPat=null,skinPat=null;
+  function groundPattern(){ // grey concrete, 64 px = 1 m, made once
     if(groundPat)return groundPat;
-    var c=document.createElement('canvas');c.width=c.height=128;var g=c.getContext('2d'),i;
-    g.fillStyle='#5b4a3a';g.fillRect(0,0,128,128);
-    for(i=0;i<900;i++){var v=60+Math.random()*70|0;g.fillStyle='rgba('+v+','+(v*0.8|0)+','+(v*0.6|0)+','+(0.25+Math.random()*0.5)+')';g.fillRect(Math.random()*128,Math.random()*128,1+Math.random()*2.5,1+Math.random()*2.5);}
-    for(i=0;i<40;i++){g.fillStyle='rgba(30,22,16,0.35)';g.beginPath();g.arc(Math.random()*128,Math.random()*128,1+Math.random()*4,0,7);g.fill();}
+    var c=document.createElement('canvas');c.width=c.height=64;var g=c.getContext('2d'),i;
+    g.fillStyle='#4b4f55';g.fillRect(0,0,64,64);
+    for(i=0;i<500;i++){var v=60+Math.random()*40|0;g.fillStyle='rgba('+v+','+(v+3)+','+(v+8)+','+(0.3+Math.random()*0.4)+')';g.fillRect(Math.random()*64|0,Math.random()*64|0,1,1);}
+    g.fillStyle='rgba(0,0,0,0.18)';g.fillRect(0,0,1,64);g.fillRect(0,0,64,1); // slab seams
     groundPat=ctx.createPattern(c,'repeat');return groundPat;
   }
+  function skinPattern(){ // pixel speckle laid over the flesh colour, 32 px = 0.5 m
+    if(skinPat)return skinPat;
+    var c=document.createElement('canvas');c.width=c.height=32;var g=c.getContext('2d');
+    for(var i=0;i<140;i++){g.fillStyle=Math.random()<0.5?'rgba(0,0,0,0.10)':'rgba(255,255,255,0.08)';g.fillRect(Math.random()*32|0,Math.random()*32|0,1,1);}
+    skinPat=ctx.createPattern(c,'repeat');return skinPat;
+  }
+  function worldPat(pat,px){ // fill with a pattern pinned to the world: px pattern pixels per metre, scales with zoom
+    var o=toScreen(Vec2(0,0)),k=cam.z/px;
+    if(pat.setTransform)pat.setTransform(new DOMMatrix([k,0,0,k,o.x,o.y]));
+    return pat;
+  }
   function drawGround(gy){
-    var off=toScreen(Vec2(0,0));
-    ctx.save();ctx.translate(off.x%128,gy);ctx.fillStyle=groundPattern();ctx.fillRect(-off.x%128-128,0,W+256,H);ctx.restore();
-    ctx.save();ctx.fillStyle='#4a0606';
-    stains.forEach(function(s){var a=toScreen(Vec2(s.x,0));ctx.globalAlpha=0.9;ctx.beginPath();ctx.ellipse(a.x,a.y+1,Math.max(1.5,s.w*cam.z*0.5),Math.max(1,s.h*cam.z),0,0,Math.PI*2);ctx.fill();});
+    ctx.save();ctx.imageSmoothingEnabled=false;ctx.fillStyle=worldPat(groundPattern(),64);ctx.fillRect(0,gy,W,H-gy+1);
+    ctx.fillStyle='#6d727a';ctx.fillRect(0,gy,W,Math.max(2,0.03*cam.z)); // lit top edge
+    ctx.fillStyle='#4a0606';
+    stains.forEach(function(s){var a=toScreen(Vec2(s.x,0));ctx.globalAlpha=0.92;ctx.beginPath();ctx.ellipse(a.x,a.y+1,Math.max(1.5,s.w*cam.z*0.5),Math.max(1,s.h*cam.z),0,0,Math.PI*2);ctx.fill();});
     ctx.restore();
   }
   function mix(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
@@ -1440,7 +1451,8 @@ var RS=(function(){
         var f=b.getFixtureList();if(!f)return;
         if(k===0&&r.headCrushed){var p=toScreen(b.getWorldCenter());ctx.fillStyle=rgb(BLOOD);ctx.beginPath();ctx.ellipse(p.x,p.y,0.09*cam.z,0.05*cam.z,b.getAngle(),0,7);ctx.fill();ctx.fillStyle='#e8dccb';for(var i=0;i<4;i++){ctx.fillRect(p.x+(i-2)*0.03*cam.z,p.y-0.01*cam.z*i,3,2);}return;}
         var c=mix(base,BLOOD,Math.min(0.85,(r.bl?r.bl[k]:0)*0.8));
-        ctx.beginPath();polyPath(b,f.getShape());ctx.fillStyle=rgb(c,far?0.72:1);ctx.fill();
+        ctx.beginPath();polyPath(b,f.getShape());ctx.fillStyle=rgb(c,far?0.72:1);ctx.fill();ctx.fillStyle=worldPat(skinPattern(),64);ctx.fill();
+        ctx.strokeStyle='#1b1b1d';ctx.lineWidth=Math.max(1,0.012*cam.z);ctx.stroke();
       });
     });
   }
@@ -1453,8 +1465,8 @@ var RS=(function(){
   }
   function draw(){
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.clearRect(0,0,W,H);
-    var fg=getComputedStyle(document.body).color;
+    ctx.fillStyle='#2c3035';ctx.fillRect(0,0,W,H); // dark sandbox backdrop
+    var fg='#dfe3e8';
     ctx.strokeStyle=fg;ctx.fillStyle=fg;ctx.lineWidth=2;
     var gy=toScreen(Vec2(0,0)).y;
     var g0=toWorld(0,H),g1=toWorld(W,0),gx,gyy; // 1 m grid
@@ -1463,7 +1475,6 @@ var RS=(function(){
     for(gyy=Math.ceil(g0.y);gyy<=g1.y;gyy++){var sy=toScreen(Vec2(0,gyy)).y;ctx.moveTo(0,sy);ctx.lineTo(W,sy);}
     ctx.stroke();ctx.restore();
     drawGround(gy);
-    ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();
     drawFlesh(true);if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;}drawFlesh(false);if(opt('oBox'))drawBodies(false);
     drawBlood();
     if(opt('oNN')&&RS.hasDet()){ // what the network thinks is happening, above each head
