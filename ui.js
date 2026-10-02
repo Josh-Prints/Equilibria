@@ -497,6 +497,28 @@
     a.push({p:tl.slice(),w:w,c:Math.random()*4|0,o:0.5+Math.random()*0.4});if(a.length>10)a.shift();
   }
   function spreadDecals(r,dt){var D=r.dec;if(!D)return;for(var k in D){var a=D[k];if(!a)continue;for(var i=0;i<a.length;i++){var d=a[i];if(d.s<d.t)d.s+=(d.t-d.s)*Math.min(1,dt*0.7);}}}
+  // lying in a pool on the floor: the side touching it soaks some up (stains the skin there, the pool shrinks a bit)
+  function soak(r,dt){
+    if(!stains.length)return;var nb=r.bodies.length,n=nb+(r.chunks?r.chunks.length:0);
+    for(var k=0;k<n;k++){
+      if(k>=nb&&r.chunks[k-nb].gone)continue;var b=partOf(r,k),f=b.getFixtureList();if(!f)continue;
+      var sh=f.getShape(),vs=sh.m_vertices;if(!vs)continue;
+      var c=b.getWorldCenter();if(c.y>0.4)continue; // nowhere near the floor
+      for(var i=0;i<vs.length;i++){
+        var w=b.getWorldPoint(vs[i]);if(w.y>0.03)continue;
+        for(var j=stains.length-1;j>=0;j--){var st=stains[j];if(Math.abs(w.x-st.x)>st.w*0.5)continue;
+          if(Math.random()<dt*Math.min(3,0.6+st.w*4)){
+            var lp=b.getLocalPoint(Vec2(w.x+(c.x-w.x)*0.15*Math.random(),w.y+(c.y-w.y)*0.25*Math.random()));
+            var A=r.dec&&r.dec[k],sz=0.014+Math.random()*0.016;
+            if(A&&A.length>=18){var m=0,md=1e9,q;for(q=0;q<A.length;q++){var dd=Math.hypot(A[q].x-lp.x,A[q].y-lp.y);if(dd<md){md=dd;m=q;}}
+              if(md<0.03)A[m].t=Math.min(0.06,A[m].t+sz*0.3);else{for(m=0,q=1;q<A.length;q++)if(A[q].t<A[m].t)m=q;A.splice(m,1);addDecalL(r,k,lp.x,lp.y,sz);}} // full: grow the splat already there, or swap out the smallest
+            else addDecalL(r,k,lp.x,lp.y,sz);
+            st.w=Math.max(0.02,st.w-0.004);st.h=Math.max(0.006,st.h-0.0004);
+          }
+          break;}
+      }
+    }
+  }
   function addDecal(r,k,w,s){var lp=partOf(r,k).getLocalPoint(w);addDecalL(r,k,lp.x,lp.y,s);}
   function randPt(b){ // a random point inside a body part
     var vs=b.getFixtureList().getShape().m_vertices,v=vs[Math.random()*vs.length|0],u=vs[Math.random()*vs.length|0],t=Math.random()*0.8,m=Math.random();
@@ -586,7 +608,7 @@
         sp++;
       });
       if(newBeat&&sp)sfx('spurt',Math.min(1,bl+0.2));
-      spreadDecals(r,dt);
+      spreadDecals(r,dt);soak(r,dt);
       // wounds ooze: drips start right on the skin at stumps and open fractures and trickle down the limb
       if(bl>0.05){
         stumps(r,function(c){if(Math.random()<dt*(r.dead?0.6:2.2)*Math.min(1,bl*1.5))ooze(r,r.bodies.indexOf(c.a),anchorA(c));
