@@ -41,6 +41,8 @@ details button{font-size:14px;padding:8px 12px}
   <label><input type="checkbox" id="oNN" checked> Neural reactions (shows what it senses)</label>
   <label><input type="checkbox" id="oGetup" checked> Get up when down (needs Neural reactions)</label>
   <label><input type="checkbox" id="oCower" checked> Cower after hard hits</label>
+  <label><input type="checkbox" id="oProtect" checked> Protect head when falling</label>
+  <label><input type="checkbox" id="oDie" checked> Can die from really hard hits</label>
   <label><input type="checkbox" id="oUse"> Use old ES policy (watch it)</label>
   <label><input type="checkbox" id="oReflex" checked> Balance reflex</label>
   <label><input type="checkbox" id="oBal2" checked> New balance + recovery steps</label>

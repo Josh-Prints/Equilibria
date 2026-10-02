@@ -149,3 +149,7 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## Cower (FLAGS.cower, tick box "Cower after hard hits")
 - If head, chest or pelvis changes velocity by more than `cowerImp` (3.5 m/s) in one tick while touching the ground, it curls up with its arms over its head for 1.5-3.5 s (longer for harder hits), trembling slightly, then eases out (`rig.age=0`) and gets up. Button pushes don't count (chest not on the ground). Measured: toppling from a 2.6+ shove backward or 5 forward, or landing flat from 3 m, triggers it; a 1 m flat drop doesn't.
+
+## Dying and head protection (FLAGS.die / FLAGS.protect, tick boxes "Can die from really hard hits", "Protect head when falling")
+- `impacts()` measures, each tick, the velocity change of every part that is touching the ground (head counts 1.4x). Above `dieImp` (12) it dies: all joints go limp for good (`goLimp`), label "dead". Measured: flat drop from 5 m, head-first from 5 m, feet-first from 8 m die; a max shove, 3 m flat drop or 4 m feet-first don't.
+- `protectHead()`: while falling with the head coming down, forearms come up (guard in front of the face when falling forward, hands behind the head otherwise), chin tucked, held 0.35 s after.
