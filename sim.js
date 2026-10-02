@@ -718,12 +718,19 @@ var RS=(function(){
   // real-world impact speeds (m/s) that shatter each part (comminuted / crushed, not just a crack), roughly from
   // fall and crash data: upper arm 13, forearm 11, hand 11, thigh 17 (femur, strongest), shin 13, foot 12; head 14
   var CRUSHL=[13,11,11,17,13,12];
+  // REALISM setting (FLAGS.realism): 2 realistic (the real-world numbers here), 1 default (the earlier hand-tuned game
+  // values: crush on the one-tick velocity change, old break/tear loads), 0 glass (default halved: everything breaks)
+  var CRUSHO=[7,12.25,19.25,8.75,7.875,19.25],BRKO=[130,115,115,60,60,60,105,100,80,60,60,60,105,100,80];
+  function rmul(){return FLAGS.realism===0?0.5:1;}
+  function brkAt(k){return FLAGS.realism===2||FLAGS.realism==null?BRK[k]:BRKO[k]*rmul();}
+  function sevAt(k){return FLAGS.realism===2||FLAGS.realism==null?SEVJ[k]:95*rmul();}
   function crushBleed(rig,dt){
     var I=injOf(rig),ps=rig.parts,k;
     if(FLAGS.crush&&I.t>0.2&&rig.impB){
       for(k=0;k<ps.length;k++){
-        var lim=k===0?FLAGS.crushImp:k<4?1e9:CRUSHL[(k-4)%6]*FLAGS.crushLimb;
-        var d=rig.impV[k];if(!(d>lim))continue;
+        var real=FLAGS.realism===2||FLAGS.realism==null;
+        var lim=k===0?(real?FLAGS.crushImp:21*rmul()*FLAGS.crushLimb):k<4?1e9:(real?CRUSHL:CRUSHO)[(k-4)%6]*FLAGS.crushLimb*(real?1:rmul());
+        var d=real?rig.impV[k]:rig.impB[k];if(!(d>lim))continue;
         if(k===0){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crush',0,d);}continue;}
         if(k<4)continue;
         var j=k-1;if(I.gone[j])continue;
@@ -760,8 +767,8 @@ var RS=(function(){
       I.load[k]+=(Math.hypot(F.x,F.y)-I.load[k])*0.08;
       I.pull[k]+=(Math.max(0,-(F.x*dx+F.y*dy)/dl)-I.pull[k])*0.08;
       if(I.t>0.2){ // not during the settle after spawning
-        if(FLAGS.inj&&!I.broken[k]&&I.load[k]>BRK[k])breakBone(rig,k,true);
-        if(FLAGS.sever&&k>=3&&I.pull[k]>SEVJ[k]){sever(rig,k);continue;}
+        if(FLAGS.inj&&!I.broken[k]&&I.load[k]>brkAt(k))breakBone(rig,k,true);
+        if(FLAGS.sever&&k>=3&&I.pull[k]>sevAt(k)){sever(rig,k);continue;}
       }
       if(!I.broken[k]&&I.blo[k]!=null){var a0=j.getJointAngle();if(a0>=JT[k].lo&&a0<=JT[k].hi){j.setLimits(JT[k].lo,JT[k].hi);I.blo[k]=I.bhi[k]=null;}else{I.blo[k]=Math.min(JT[k].lo,a0);I.bhi[k]=Math.max(JT[k].hi,a0);j.setLimits(I.blo[k],I.bhi[k]);}} // healed: normal range once back inside it
       if(!I.broken[k]&&!j.isLimitEnabled()){var a=j.getJointAngle();if(a>=j.getLowerLimit()&&a<=j.getUpperLimit())j.enableLimit(true);}

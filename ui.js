@@ -316,24 +316,25 @@
   // gore setting: 5 levels, each mapped to a 0-10 strength (0 none, 3 light, 5 bleeding + limbs off, 8 shattering, 10 full)
   var GLV=[0,3,5,8,10],GNAME=['None','Light','Medium','Heavy','Full'],
     GDESC=['No blood, no limbs coming off, nobody dies.','A little blood, bones break, can die. Limbs stay on.','Bleeding, limbs can be torn off.','Lots of blood, crushed limbs shatter.','Everything.'];
+  var RNAME=['Glass','Default','Realistic'],RDESC=['Everything breaks, crushes and tears off easily.','The original game feel.','Real-world breaking forces and crush speeds.'];
   function goreV(){return GLV[+$('rGore').value]||0;}
   function syncMenu(){
     $('bSlowB').textContent='Slow motion: '+(opt('oSlow')?'on':'off');
     $('mSound').textContent=$('sSound').textContent='Sound: '+(opt('oSound')?'on':'off');
-    var cv=+$('rCrush').value,gl=+$('rGore').value,gv=goreV();$('vCrush').textContent=cv;$('vGore').textContent=GNAME[gl];
+    var cv=+$('rCrush').value,gl=+$('rGore').value,gv=goreV(),rl=+$('rReal').value;$('vCrush').textContent=cv;$('vReal').textContent=RNAME[rl];$('rDesc').textContent=RDESC[rl];$('vGore').textContent=GNAME[gl];
     $('oGore').checked=gv>0;GM=gv/10;
     $('gDesc').textContent=GDESC[gl];
-    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),goreL:gl,crush:cv}));}catch(_){}
+    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),goreL:gl,crush:cv,real:rl}));}catch(_){}
     if(AC&&master)master.gain.value=opt('oSound')?0.9:0;
   }
-  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;if(so.goreL!=null)$('rGore').value=so.goreL;else if(so.goreLv!=null)$('rGore').value=Math.round(so.goreLv*0.4);else if(so.gore===false)$('rGore').value=0;if(so.crush!=null)$('rCrush').value=so.crush;}}catch(_){}
+  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;if(so.goreL!=null)$('rGore').value=so.goreL;else if(so.goreLv!=null)$('rGore').value=Math.round(so.goreLv*0.4);else if(so.gore===false)$('rGore').value=0;if(so.crush!=null)$('rCrush').value=so.crush;if(so.real!=null)$('rReal').value=so.real;}}catch(_){}
   function pauseMenu(on){userPaused=on;$('pmenu').hidden=!on;setOn('bPause',on);}
   $('bPause').onclick=function(){pauseMenu(true);};
   $('mResume').onclick=function(){pauseMenu(false);};
   $('bSlowB').onclick=function(){tgl('oSlow');};
   $('mSound').onclick=$('sSound').onclick=function(){tgl('oSound');audioInit();};
   $('mSet').onclick=$('sSet').onclick=function(){$('smenu').hidden=false;};$('sDone').onclick=function(){$('smenu').hidden=true;};
-  $('rCrush').oninput=$('rGore').oninput=syncMenu;
+  $('rCrush').oninput=$('rGore').oninput=$('rReal').oninput=syncMenu;
   $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];});pauseMenu(false);};
   $('mMain').onclick=function(){pauseMenu(false);init();var sp=$('splash');sp.hidden=false;sp.style.opacity=1;};
   $('bPlay').onclick=function(){var sp=$('splash');sp.style.transition='opacity .4s';sp.style.opacity=0;setTimeout(function(){sp.hidden=true;},400);audioInit();
@@ -890,7 +891,7 @@
       var use=opt('oUse'),pd=opt('oPD'),reflex=opt('oReflex'),i;
       RS.FLAGS.air=RS.FLAGS.land=RS.FLAGS.fall=opt('oFall')?1:0;
       RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;RS.FLAGS.cower=opt('oCower')?1:0;RS.FLAGS.die=opt('oDie')?1:0;RS.FLAGS.protect=opt('oProtect')?1:0;RS.FLAGS.inj=opt('oInj')?1:0;var gv=goreV();RS.FLAGS.sever=opt('oSever')&&gv>=4?1:0;RS.FLAGS.shatter=gv>=7?1:0;RS.FLAGS.crush=1;RS.FLAGS.bleed=gv>0?1:0;RS.FLAGS.bleedMul=gv/10;RS.FLAGS.death=gv>0?1:0;if(!gv)RS.FLAGS.die=0;
-      RS.FLAGS.crushLimb=+$('rCrush').value/7;RS.FLAGS.crushImp=14*RS.FLAGS.crushLimb; // settings: 7 (default) = real-world speeds
+      RS.FLAGS.realism=+$('rReal').value;RS.FLAGS.crushLimb=+$('rCrush').value/7;RS.FLAGS.crushImp=14*RS.FLAGS.crushLimb; // settings: 7 (default) = real-world speeds
       while(acc>=DT){
         if((use||reflex)&&stepCount%SUB===0)for(i=0;i<rigs.length;i++)RS.act(rigs[i],use?ES.theta:ZERO_TH,liveBufs[i],liveRng,{delay:1,noise:0.005,reflex:reflex}); // reflexes run even when the policy is off (untrained = zero weights)
         if(pd)for(i=0;i<rigs.length;i++)RS.pdRig(rigs[i]);
