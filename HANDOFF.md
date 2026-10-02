@@ -139,3 +139,10 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Wants honesty about whether something actually worked; I over-claimed once (said they could untick reflexes to read Test numbers; the flags did not apply). Report measured numbers and what was not verified.
 - Often asks a question first ("don't fix yet, just tell me"); respect that.
 - Phone-only: prefer solutions that run on GitHub Actions or in the Claude app, and give iPhone-friendly steps.
+
+## Getting up (FLAGS.getup, page tick box "Get up when down")
+- Runs when the detector says "down" (dp[4] > 0.6) and the body has been still for 0.8 s; label above the head shows "getting up".
+- `GU.supine` (on the back): rock up to sitting with a leg swing, tuck the feet and fold forward, crouch on the feet, stand. Hands back to balance once standing with nearly straight knees, easing targets in via `rig.age` (snapping straight from a crouch launched it into the air).
+- `GU.prone` (face down) is empty for now: it stays down. Hand-made routes (hands and knees, kneel, half-kneel, pike) all failed; the rig can't get a foot under itself from kneeling (ankle ±0.7, no toes, arms ~12x weaker than legs). Next idea: forward roll from hands and knees into the sit, then reuse the supine tail.
+- While getting up only, hip flexion is allowed to 2.8 (normally 2.4) and spine curl to chest -0.8 / abd -0.4 -> -0.6 (normally -0.5 / -0.4) via `guLimits`; normal limits come back once the joints are inside them again.
+- Stages were found with ES in the sim, one move at a time with goal scores (sit, then crouch over the feet, then stand). Supine: 20/20 held-out starts end standing (~6.7 s). Push/drop survival unchanged with it off; drop 20 -> 23/40 with it on.
