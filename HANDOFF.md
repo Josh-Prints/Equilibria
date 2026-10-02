@@ -224,3 +224,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Settings overlay (#smenu) from the main menu and pause menu replaces the Blood & gore toggles. Saved in localStorage eqOpts {goreLv, crush}.
 - Crush threshold 1-10 (default 7): FLAGS.crushLimb=0.25*v (was 1.25), crushImp=12*crushLimb. At 7, 1 crush in 40 hard slams (was 8).
 - Gore 0-10: GM=v/10 scales blood particles/splats/ooze; bleedMul=v/10; 0 = no blood, no sever, FLAGS.death=0 (sim guards every rig.dead=true); 1-3 bones and death, limbs stay on; 4+ sever; 7+ shatter.
+
+## v0.2.3
+- Gore slider is 5 levels (None, Light, Medium, Heavy, Full) mapped through GLV=[0,3,5,8,10] to the old 0-10 strength; saved as eqOpts.goreL.
