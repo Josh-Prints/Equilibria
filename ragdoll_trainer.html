@@ -60,6 +60,9 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
 #hmenu{border-radius:2px;border:1px solid #3a342a;background:#0f0e0cf2}
 #hmenu button{font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;background:none;border-radius:0;color:#c9c2b4;padding:8px 14px 5px}
 #hmenu button:active{color:#ffb020;filter:none}
+#spmenu{position:fixed;z-index:8;left:8px;bottom:calc(64px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:2px;padding:6px;border:1px solid #3a342a;background:#0f0e0cf2;box-shadow:0 4px 16px #0008}#spmenu[hidden]{display:none}
+#spmenu button{font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;background:none;border-radius:0;color:#c9c2b4;padding:8px 14px 5px;text-align:left}
+#spmenu button:active{color:#ffb020;filter:none}
 #rename.gm{align-items:flex-start!important}#rename .gt{font-size:clamp(34px,10vw,52px)}#rename .row{gap:16px}
 #rename .row button{all:unset;cursor:pointer;font:500 30px/1.1 Teko,system-ui,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#a9a397}#rename .row button:active{color:#ffb020}
 #rnIn{font:400 18px 'Share Tech Mono',monospace;border-radius:0;background:#14120f;color:#ffb020;border:1px solid #3a342a;outline:none}
@@ -175,6 +178,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <div id="hlc"></div>
   <nav><button id="hlClose">Close</button></nav>
 </div>
+<div id="spmenu" hidden><button id="spHuman">Human</button><button id="spGun">Handgun</button></div>
 <div id="hmenu" hidden>
   <button id="hmRename">Rename</button>
   <button id="hmFollow">Follow</button>
@@ -199,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.10</div>
+  <div class="ver">beta v0.2.11</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -219,7 +223,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.10</div>
+  <div class="ver">beta v0.2.11</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -970,6 +974,7 @@ var RS=(function(){
     if(FLAGS.bleed&&rig.blood>0){
       var w=0;for(k=3;k<NJ;k++){if(I.gone[k]&&(k===3||k===6||k===9||k===12||!I.gone[k-1]))w+=k%3===0?1:0.7;else if(I.broken[k])w+=0.05;}
       if(I.broken[1]||I.broken[2])w+=0.1;
+      w+=(rig.holes||0)*0.25; // gunshot wounds (the page adds these)
       rig.bleedW=w;
       rig.blood=Math.max(0,rig.blood-(FLAGS.bleedMul==null?1:FLAGS.bleedMul)*0.05*w*(0.3+0.7*rig.blood)*(rig.dead?0.3:1)*dt);
       if(rig.blood<0.2&&!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'bledout',0);}
@@ -1441,11 +1446,63 @@ var RS=(function(){
   // =====================================================================
   function init(){
     world=new planck.World({gravity:Vec2(0,-10)});
-    drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;camFollow=null;
+    drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;camFollow=null;items=[];fx=[];
     ground=world.createBody();ground.createFixture(Box(1000,1,Vec2(0,-1),0),{friction:0.9});
     spawn('stand');
   }
   var liveBufs=[];
+  // ITEMS: things you can spawn besides humans. Handgun: drag it around, tap it to fire along the barrel.
+  var items=[],fx=[];
+  function spawnGun(){
+    var b=world.createBody({type:'dynamic',position:Vec2(cam.x,Math.max(0.6,cam.y+0.3)),angle:0,bullet:true});
+    b.createFixture(Box(0.09,0.02,Vec2(0.015,0.012),0),{density:2.2,friction:0.6,restitution:0.1}); // slide and barrel
+    b.createFixture(Box(0.02,0.042,Vec2(-0.045,-0.03),-0.25),{density:2.2,friction:0.8,restitution:0.1}); // grip
+    b.createFixture(Box(0.012,0.006,Vec2(-0.008,-0.014),0),{density:1,friction:0.6}); // trigger guard
+    b.setUserData({gun:true});items.push({type:'gun',b:b,flash:0});
+  }
+  function partHit(b){ // which human (and which part index, chunks after the body list) a body belongs to
+    for(var i=0;i<rigs.length;i++){var r=rigs[i],k=r.bodies.indexOf(b);if(k>=0)return {r:r,k:k};
+      if(r.chunks)for(var c=0;c<r.chunks.length;c++)if(r.chunks[c].b===b&&!r.chunks[c].gone)return {r:r,k:r.bodies.length+c,ch:r.chunks[c]};}
+    return null;
+  }
+  function fire(g){
+    var b=g.b,mz=b.getWorldPoint(Vec2(0.11,0.012)),d=b.getWorldVector(Vec2(1,0)),end=Vec2(mz.x+d.x*40,mz.y+d.y*40),best=null;
+    world.rayCast(mz,end,function(f,pt,n,fr){if(f.getBody()===b)return -1;best={f:f,p:Vec2(pt.x,pt.y),n:Vec2(n.x,n.y),fr:fr};return fr;});
+    var hp=best?best.p:end;
+    fx.push({t:'tracer',a:Vec2(mz.x,mz.y),b:hp,life:0.09},{t:'flash',p:Vec2(mz.x,mz.y),d:Vec2(d.x,d.y),life:0.06});
+    b.applyLinearImpulse(Vec2(-d.x*0.03,-d.y*0.03),mz,true);b.applyAngularImpulse(0.0009,true); // recoil: kicks back and up
+    sfx('bang');
+    if(!best)return;
+    var hb=best.f.getBody();
+    if(hb.isDynamic())hb.applyLinearImpulse(Vec2(d.x*0.16,d.y*0.16),hp,true); // a 9 mm round's momentum (scaled up a bit so you see it)
+    var H=partHit(hb);if(!H)return;
+    var r=H.r,k=H.k,gore=opt('oGore');
+    sfx('squelch');r.painS=Math.min(2,(r.painS||0)+0.8);
+    if(gore){
+      gL=layerK(r,k);gush(hp.x,hp.y,-d.x*0.6,-d.y*0.6,14,1.2,0.6);gush(hp.x,hp.y,d.x*2.5,d.y*2.5,30,2.4,0.5); // entry splash, exit spray
+      addDecal(r,k,hp,0.03);splats(r,k,2,0.02);
+      var lp=partOf(r,k).getLocalPoint(hp);(r.hole||(r.hole=[])).push({k:k,x:lp.x,y:lp.y});
+    }
+    if(RS.FLAGS.bleed)r.holes=(r.holes||0)+1;
+    if(k===0){if(RS.FLAGS.death!==0&&!r.dead){r.dead=true;r.ev=r.ev||[];}}
+    else if(k<r.bodies.length&&k!==3&&r.inj){var j=k>=4?k-1:k;var pb=RS.FLAGS.realism===0?0.8:RS.FLAGS.realism===2?0.35:0.5;
+      if(!r.inj.broken[j]&&!r.inj.gone[j]&&Math.random()<pb)RS.breakBone(r,j,true);}
+  }
+  function drawItems(){
+    items.forEach(function(g){
+      var b=g.b;ctx.beginPath();
+      for(var f=b.getFixtureList();f;f=f.getNext()){var vs=f.getShape().m_vertices;for(var i=0;i<vs.length;i++){var q=toScreen(b.getWorldPoint(vs[i]));if(i)ctx.lineTo(q.x,q.y);else ctx.moveTo(q.x,q.y);}ctx.closePath();}
+      ctx.fillStyle='#4a4741';ctx.fill();ctx.strokeStyle='#14120f';ctx.lineWidth=Math.max(1,0.006*cam.z);ctx.stroke();
+      var s1=toScreen(b.getWorldPoint(Vec2(-0.07,0.028))),s2=toScreen(b.getWorldPoint(Vec2(0.1,0.028))); // slide highlight
+      ctx.strokeStyle='rgba(255,176,32,0.35)';ctx.lineWidth=Math.max(1,0.004*cam.z);ctx.beginPath();ctx.moveTo(s1.x,s1.y);ctx.lineTo(s2.x,s2.y);ctx.stroke();
+    });
+    for(var i=fx.length-1;i>=0;i--){var e=fx[i];
+      if(e.t==='tracer'){var a=toScreen(e.a),c=toScreen(e.b);ctx.strokeStyle='rgba(255,220,150,'+(e.life/0.09)+')';ctx.lineWidth=Math.max(1,0.006*cam.z);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(c.x,c.y);ctx.stroke();}
+      else{var p=toScreen(e.p),r0=0.06*cam.z*(e.life/0.06),ang=Math.atan2(-e.d.y,e.d.x);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(ang);
+        ctx.fillStyle='rgba(255,200,80,0.9)';ctx.beginPath();ctx.moveTo(0,-r0*0.35);ctx.lineTo(r0*1.6,0);ctx.lineTo(0,r0*0.35);ctx.closePath();ctx.fill();
+        ctx.fillStyle='rgba(255,250,220,0.95)';ctx.beginPath();ctx.arc(0,0,r0*0.35,0,7);ctx.fill();ctx.restore();}}
+  }
+  function fxStep(dt){for(var i=fx.length-1;i>=0;i--){fx[i].life-=dt;if(fx[i].life<=0)fx.splice(i,1);}}
   function spawn(kind){
     var x=cam.x+(rigs.length?(Math.random()-0.5)*0.6:-0.2);
     for(var tries=0;tries<12;tries++){ // don't spawn inside someone (overlapping bodies would break bones)
@@ -1510,7 +1567,7 @@ var RS=(function(){
     pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,z:cam.z,w:toWorld(mx,my)};
     mode='pinch';drag=null;
   }
-  var holdT=0;
+  var holdT=0,tap=null;
   cv.addEventListener('pointerdown',function(e){
     camT=null;
     e.preventDefault();
@@ -1521,7 +1578,7 @@ var RS=(function(){
     if(h){
       var wp=toWorld(h.sx,h.sy);
       drag={body:h.b,local:h.b.getLocalPoint(wp),target:toWorld(p.x,p.y),mass:islandMass(h.b)};
-      mode='drag';
+      mode='drag';tap={id:e.pointerId,t:performance.now(),x:p.x,y:p.y,b:h.b};
       var r0=rigOf(h.b),p0={x:p.x,y:p.y};clearTimeout(holdT);
       holdT=setTimeout(function(){var q=ptrs[e.pointerId];if(r0&&mode==='drag'&&q&&Math.hypot(q.x-p0.x,q.y-p0.y)<10){drag=null;mode='none';openMenu(r0,q);}},600);
     }else{mode='pan';pan={x:p.x,y:p.y};camFollow=null;}
@@ -1540,6 +1597,8 @@ var RS=(function(){
   });
   function up(e){
     clearTimeout(holdT);
+    if(tap&&tap.id===e.pointerId){var q=ptrs[e.pointerId];
+      if(q&&performance.now()-tap.t<350&&Math.hypot(q.x-tap.x,q.y-tap.y)<12)items.forEach(function(g){if(g.b===tap.b)fire(g);});tap=null;}
     delete ptrs[e.pointerId];
     var k=ids();
     if(k.length===0){mode='none';drag=null;pan=null;pinch=null;}
@@ -1552,7 +1611,9 @@ var RS=(function(){
     document.addEventListener(n,function(e){if(e.target===cv)e.preventDefault();},{passive:false});
   });
 
-  document.getElementById('bSpawn').onclick=function(){spawn('stand');};
+  document.getElementById('bSpawn').onclick=function(){var m=$('spmenu');m.hidden=!m.hidden;};
+  document.getElementById('spHuman').onclick=function(){$('spmenu').hidden=true;spawn('stand');};
+  document.getElementById('spGun').onclick=function(){$('spmenu').hidden=true;spawnGun();};
   document.getElementById('bReset').onclick=document.getElementById('bReset2').onclick=function(){init();pauseMenu(false);};
   var userPaused=false,MAXR=Infinity; // no cap on people
   function setOn(id,on){document.getElementById(id).classList.toggle('on',!!on);}
@@ -1633,7 +1694,7 @@ var RS=(function(){
   document.getElementById('hmHeal').onclick=function(){var r=menuRig;closeMenu();if(!r)return;for(var k=0;k<RS.NJ;k++)RS.breakBone(r,k,false);r.blood=1;r.dead=false;r.koT=0;r.age=0;if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];};
   document.getElementById('hmKill').onclick=function(){if(menuRig)menuRig.dead=true;closeMenu();};
   document.getElementById('hmRemove').onclick=function(){if(menuRig)removeRig(menuRig);closeMenu();};
-  cv.addEventListener('pointerdown',function(){if(menuRig)closeMenu();},true);
+  cv.addEventListener('pointerdown',function(){if(menuRig)closeMenu();$('spmenu').hidden=true;},true);
   // pixelated number painted on each chest (3x5 font)
   var FONT={0:'111101101101111',1:'010110010010111',2:'111001111100111',3:'111001111001111',4:'101101111001001',5:'111100111001111',6:'111100111101111',7:'111001010010010',8:'111101111101111',9:'111101111001111'};
   function drawNumber(r){
@@ -1724,6 +1785,7 @@ var RS=(function(){
     thud:function(d){var t=AC.currentTime;if(t-lastThud<0.05)return;lastThud=t;var v=Math.min(1,(d-2)/9);nz(t,0.14,'lowpass',260+40*d,1,0.7*v);tn(t,0.16,120,42,0.6*v);},
     crunch:function(big){var t=AC.currentTime,n=big?9:5;for(var i=0;i<n;i++)nz(t+i*0.014+Math.random()*0.01,0.045,'bandpass',1100+Math.random()*2800,2.5,big?0.7:0.5);tn(t,0.22,95,38,big?0.9:0.6);nz(t,0.3,'lowpass',700,1,big?0.45:0.25);},
     squelch:function(){var t=AC.currentTime;nz(t,0.4,'bandpass',1500,6,0.7,220);nz(t+0.06,0.3,'bandpass',900,9,0.5,160);nz(t+0.12,0.25,'bandpass',600,7,0.35,140);},
+    bang:function(){var t=AC.currentTime;nz(t,0.09,'highpass',1800,0.7,1.0);nz(t,0.35,'lowpass',1400,0.8,0.9,180);tn(t,0.18,160,45,1.0);nz(t+0.02,0.6,'bandpass',500,0.6,0.25,120);},
     spurt:function(v){var t=AC.currentTime;nz(t,0.22,'bandpass',2600,1.4,0.18*v,800);},
     splat:function(v){var t=AC.currentTime;if(t-lastSplat<0.03)return;lastSplat=t;nz(t,0.07,'bandpass',600+Math.random()*500,3,0.12*v);}
   };
@@ -1883,6 +1945,7 @@ var RS=(function(){
           if(Math.random()<dt*0.8)ooze(r,r.bodies.indexOf(c.b),c.b.getWorldPoint(c.j.getLocalAnchorB()));});
         if(r.inj)for(var kk=0;kk<RS.NJ;kk++)if(r.inj.broken[kk]&&!r.inj.gone[kk]&&Math.random()<dt*0.5)ooze(r,r.bodies.indexOf(r.rc[kk].b),anchorA(r.rc[kk]));
         if(r.chunks)r.chunks.forEach(function(ch,ci){if(!ch.gone&&Math.random()<dt*0.4)ooze(r,r.bodies.length+ci,ch.b.getPosition());});
+        if(r.hole&&bl>0.02)r.hole.forEach(function(h){var hb=partOf(r,h.k);if(hb&&Math.random()<dt*(r.dead?0.4:1.4))ooze(r,h.k,hb.getWorldPoint(Vec2(h.x,h.y)));});
       }
       var I=r.inj;if(I)for(var k=0;k<RS.NJ;k++)if(I.broken[k]&&Math.random()<0.04){var q=anchorA(r.rc[k]);gL=layerOf(r.bodies.indexOf(r.rc[k].b));gush(q.x,q.y,0,0,1,0.2,1);} // open fractures drip
     });
@@ -2051,6 +2114,7 @@ var RS=(function(){
     ctx.stroke();ctx.restore();
     drawGround(gy);
     for(var L=0;L<5;L++){drawFlesh(L,true);drawFlesh(L,false);drawStrands(L);drawBlood(L);} // far arm, far leg, body, near leg, near arm on top
+    drawItems();
     if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;drawBodies(false);}
     { // name above the head (only once you've named them)
       ctx.font='500 18px Teko,system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
@@ -2146,10 +2210,10 @@ var RS=(function(){
     if(camFollow&&rigs.indexOf(camFollow)<0)camFollow=null;
     if(camFollow){var fp=camFollow.bodies[3].getPosition();cam.x+=(fp.x-cam.x)*0.1;cam.y+=(fp.y+0.3-cam.y)*0.1;}
     if(camT){cam.x+=(camT.x-cam.x)*0.15;cam.y+=(camT.y-cam.y)*0.15;if(Math.abs(camT.x-cam.x)+Math.abs(camT.y-cam.y)<0.005)camT=null;}
-    if(!paused)goreStep(Math.min(dt,0.05));
+    if(!paused){goreStep(Math.min(dt,0.05));fxStep(Math.min(dt,0.05));}
     draw();if(++injN%10===0){injSync();hud();}
   }
-  window.EQ={rigs:function(){return rigs;},parts:function(){return parts;},cam:function(){return cam;},follow:function(){return camFollow;}}; // for poking at it from the console
+  window.EQ={rigs:function(){return rigs;},parts:function(){return parts;},cam:function(){return cam;},follow:function(){return camFollow;},items:function(){return items;},fire:fire,fx:function(){return fx;},toScreen:toScreen}; // for poking at it from the console
   init();updateInfo();requestAnimationFrame(frame);
 })();
 

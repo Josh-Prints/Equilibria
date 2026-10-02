@@ -754,6 +754,7 @@ var RS=(function(){
     if(FLAGS.bleed&&rig.blood>0){
       var w=0;for(k=3;k<NJ;k++){if(I.gone[k]&&(k===3||k===6||k===9||k===12||!I.gone[k-1]))w+=k%3===0?1:0.7;else if(I.broken[k])w+=0.05;}
       if(I.broken[1]||I.broken[2])w+=0.1;
+      w+=(rig.holes||0)*0.25; // gunshot wounds (the page adds these)
       rig.bleedW=w;
       rig.blood=Math.max(0,rig.blood-(FLAGS.bleedMul==null?1:FLAGS.bleedMul)*0.05*w*(0.3+0.7*rig.blood)*(rig.dead?0.3:1)*dt);
       if(rig.blood<0.2&&!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'bledout',0);}

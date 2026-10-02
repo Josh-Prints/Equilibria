@@ -63,6 +63,9 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
 #hmenu{border-radius:2px;border:1px solid #3a342a;background:#0f0e0cf2}
 #hmenu button{font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;background:none;border-radius:0;color:#c9c2b4;padding:8px 14px 5px}
 #hmenu button:active{color:#ffb020;filter:none}
+#spmenu{position:fixed;z-index:8;left:8px;bottom:calc(64px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:2px;padding:6px;border:1px solid #3a342a;background:#0f0e0cf2;box-shadow:0 4px 16px #0008}#spmenu[hidden]{display:none}
+#spmenu button{font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;background:none;border-radius:0;color:#c9c2b4;padding:8px 14px 5px;text-align:left}
+#spmenu button:active{color:#ffb020;filter:none}
 #rename.gm{align-items:flex-start!important}#rename .gt{font-size:clamp(34px,10vw,52px)}#rename .row{gap:16px}
 #rename .row button{all:unset;cursor:pointer;font:500 30px/1.1 Teko,system-ui,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#a9a397}#rename .row button:active{color:#ffb020}
 #rnIn{font:400 18px 'Share Tech Mono',monospace;border-radius:0;background:#14120f;color:#ffb020;border:1px solid #3a342a;outline:none}
@@ -178,6 +181,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <div id="hlc"></div>
   <nav><button id="hlClose">Close</button></nav>
 </div>
+<div id="spmenu" hidden><button id="spHuman">Human</button><button id="spGun">Handgun</button></div>
 <div id="hmenu" hidden>
   <button id="hmRename">Rename</button>
   <button id="hmFollow">Follow</button>
@@ -202,7 +206,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.10</div>
+  <div class="ver">beta v0.2.11</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -222,7 +226,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.10</div>
+  <div class="ver">beta v0.2.11</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
