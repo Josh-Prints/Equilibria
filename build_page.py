@@ -15,7 +15,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--
 canvas#c{display:block;width:100%;height:100%;touch-action:none}
 #bar{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;justify-content:center;flex-wrap:wrap;padding:0 8px}
 button{font:600 15px system-ui,Arial,sans-serif;padding:11px 14px;border:0;border-radius:10px;background:var(--btn);color:var(--fg)}
-#hint{position:fixed;bottom:calc(112px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;font-size:12px;opacity:.7;pointer-events:none;padding:0 8px}
+#hint{position:fixed;bottom:calc(112px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;font-size:12px;opacity:.7;color:#dfe3e8;pointer-events:none;padding:0 8px}
 #panels{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));left:8px;display:flex;flex-direction:column;gap:6px;max-height:calc(100% - 150px);overflow:auto;max-width:calc(100% - 16px)}
 details{background:var(--panel);border-radius:10px;padding:6px 10px;font-size:14px;backdrop-filter:blur(6px)}
 summary{font-weight:600;padding:2px 0}
@@ -79,7 +79,7 @@ details button{font-size:14px;padding:8px 12px}
   <label>Strength <input type="range" id="pS" min="0.1" max="3" step="0.1" value="1" style="width:110px;height:auto"></label>
   <label><input type="checkbox" id="oGore" checked> Blood &amp; gore</label>
   <label><input type="checkbox" id="oSound" checked> Sound</label>
-  <label><input type="checkbox" id="oBox" checked> Boxes</label>
+  <label><input type="checkbox" id="oBox"> Boxes</label>
   <label><input type="checkbox" id="oSkel"> Skeleton</label>
   <label><input type="checkbox" id="oJoint"> Joints</label>
   <label><input type="checkbox" id="oCom"> COM &amp; support</label>
