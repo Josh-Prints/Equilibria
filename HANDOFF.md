@@ -143,7 +143,7 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 ## Getting up (FLAGS.getup, page tick box "Get up when down")
 - Runs when the detector says "down" (dp[4] > 0.6) and the body has been still for 0.8 s; label above the head shows "getting up".
 - `GU.supine` (on the back): rock up to sitting with a leg swing, tuck the feet and fold forward, crouch on the feet, stand. Hands back to balance once standing with nearly straight knees, easing targets in via `rig.age` (snapping straight from a crouch launched it into the air).
-- `GU.prone` (face down): push up, tip over forward into a sit (found with a 'sit' goal), then reuse the supine stages from the sit onward. 20/20 in sim, ~11 s. Hand-made routes via kneeling all failed: the rig can't get a foot under itself from kneeling (ankle ±0.7, no toes, arms ~12x weaker than legs).
+- `GU.prone` (face down): push up, hands and knees, near foot forward into a lunge (ES with a 'lunge' goal: front foot flat ahead of the pelvis, head high), then up off the front foot. 20/20 in sim, ~8 s. Every stage has `lag` (one side trails the other by >= 0.3 s) and `m` (near-arm offsets) so limbs move one at a time; supine was re-tuned the same way (20/20). Optimiser penalises going upside down, because without that it found a flip.
 - While getting up only, hip flexion is allowed to 2.8 (normally 2.4) and spine curl to chest -0.8 / abd -0.4 -> -0.6 (normally -0.5 / -0.4) via `guLimits`; normal limits come back once the joints are inside them again.
 - Stages were found with ES in the sim, one move at a time with goal scores (sit, then crouch over the feet, then stand). Supine: 20/20 held-out starts end standing (~6.7 s). Push/drop survival unchanged with it off; drop 20 -> 23/40 with it on.
 
