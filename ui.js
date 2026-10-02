@@ -329,7 +329,7 @@
   $('bSlowB').onclick=function(){tgl('oSlow');};
   $('mSound').onclick=$('sSound').onclick=function(){tgl('oSound');audioInit();};
   $('mGore').onclick=$('sGore').onclick=function(){tgl('oGore');};
-  $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);});pauseMenu(false);};
+  $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);r.dec=[];});pauseMenu(false);};
   $('mMain').onclick=function(){pauseMenu(false);init();var sp=$('splash');sp.hidden=false;sp.style.opacity=1;};
   $('bPlay').onclick=function(){var sp=$('splash');sp.style.transition='opacity .4s';sp.style.opacity=0;setTimeout(function(){sp.hidden=true;},400);audioInit();
     var h=$('hint');h.style.opacity=0.7;setTimeout(function(){h.style.opacity=0;},7000);};
@@ -375,7 +375,7 @@
   document.getElementById('hmRename').onclick=function(){var r=menuRig;closeMenu();if(r)openRename(r);};
   document.getElementById('hmFollow').onclick=function(){var r=menuRig;closeMenu();camFollow=camFollow===r?null:r;camT=null;};
   document.getElementById('hmTurn').onclick=function(){if(menuRig)turnAround(menuRig);closeMenu();};
-  document.getElementById('hmHeal').onclick=function(){var r=menuRig;closeMenu();if(!r)return;for(var k=0;k<RS.NJ;k++)RS.breakBone(r,k,false);r.blood=1;r.dead=false;r.koT=0;r.age=0;if(r.bl)r.bl.fill(0);};
+  document.getElementById('hmHeal').onclick=function(){var r=menuRig;closeMenu();if(!r)return;for(var k=0;k<RS.NJ;k++)RS.breakBone(r,k,false);r.blood=1;r.dead=false;r.koT=0;r.age=0;if(r.bl)r.bl.fill(0);r.dec=[];};
   document.getElementById('hmKill').onclick=function(){if(menuRig)menuRig.dead=true;closeMenu();};
   document.getElementById('hmRemove').onclick=function(){if(menuRig)removeRig(menuRig);closeMenu();};
   cv.addEventListener('pointerdown',function(){if(menuRig)closeMenu();},true);
@@ -468,19 +468,41 @@
   };
   function sfx(n,a){if(AC&&opt('oSound')&&AC.state==='running')SFX[n](a);}
 
-  var parts=[],stains=[],MAXP=1400;
+  var parts=[],stains=[],MAXP=1400,gL=2,STICK=0.35;
+  // draw layers, bottom to top: 0 head and torso, 1 legs, 2 arms (blood, tears and strands go on the layer they came from)
+  function layerOf(k){return k<4?0:((k-4)%6<3?2:1);}
   function gush(x,y,vx,vy,n,spd,spread,gib){
     for(var i=0;i<n&&parts.length<MAXP;i++){
       var a=Math.random()*Math.PI*2,s=spd*(0.3+Math.random()*0.9);
-      parts.push({x:x,y:y,vx:vx+Math.cos(a)*s*spread,vy:vy+Math.sin(a)*s*spread+(spread<1?s*0.2:0),r:gib?0.02+Math.random()*0.03:0.006+Math.random()*0.014,g:!!gib,life:6});
+      parts.push({x:x,y:y,vx:vx+Math.cos(a)*s*spread,vy:vy+Math.sin(a)*s*spread+(spread<1?s*0.2:0),r:gib?0.02+Math.random()*0.03:0.006+Math.random()*0.014,g:!!gib,life:6,L:gL,ck:!gib&&Math.random()<STICK});
     }
   }
   function spray(p,dx,dy,n,spd){ // directed jet
     for(var i=0;i<n&&parts.length<MAXP;i++){
       var s=spd*(0.6+Math.random()*0.6),j=(Math.random()-0.5)*0.5,c=Math.cos(j),sn=Math.sin(j);
-      parts.push({x:p.x,y:p.y,vx:(dx*c-dy*sn)*s,vy:(dx*sn+dy*c)*s,r:0.008+Math.random()*0.014,g:false,life:6});
+      parts.push({x:p.x,y:p.y,vx:(dx*c-dy*sn)*s,vy:(dx*sn+dy*c)*s,r:0.008+Math.random()*0.014,g:false,life:6,L:gL,ck:Math.random()<0.2});
     }
   }
+  // blood soaked into the skin: splats stored in each body's own frame, so they move with it
+  function addDecalL(r,k,lx,ly,s){
+    var D=r.dec||(r.dec=[]),a=D[k]||(D[k]=[]);
+    if(a.length>=60){var o=a[Math.random()*a.length|0];o.s=Math.min(0.05,o.s+s*0.25);return;}
+    a.push({x:lx,y:ly,s:s,a:Math.random()*6.28});
+  }
+  function addDecal(r,k,w,s){var lp=r.bodies[k].getLocalPoint(w);addDecalL(r,k,lp.x,lp.y,s);}
+  function randPt(b){ // a random point inside a body part
+    var vs=b.getFixtureList().getShape().m_vertices,v=vs[Math.random()*vs.length|0],u=vs[Math.random()*vs.length|0],t=Math.random()*0.8,m=Math.random();
+    return b.getWorldPoint(Vec2((v.x*m+u.x*(1-m))*t,(v.y*m+u.y*(1-m))*t));
+  }
+  function splats(r,k,n,s){for(var i=0;i<n;i++)addDecal(r,k,randPt(r.bodies[k]),s*(0.6+Math.random()*0.8));}
+  function hitBody(q){ // which body part (if any) a drop is inside
+    for(var i=0;i<rigs.length;i++){var bs=rigs[i].bodies;
+      for(var k=0;k<bs.length;k++){var b=bs[k];if(b===q.skip&&q.skT>0)continue;var f=b.getFixtureList();if(!f)continue;
+        var ab=f.getAABB(0);if(q.x<ab.lowerBound.x||q.x>ab.upperBound.x||q.y<ab.lowerBound.y||q.y>ab.upperBound.y)continue;
+        if(f.testPoint(Vec2(q.x,q.y)))return {r:rigs[i],k:k,b:b,f:f};}}
+    return null;
+  }
+  function stick(q,h){var lp=h.b.getLocalPoint(Vec2(q.x,q.y));q.on=h.b;q.fx=h.f;q.rig=h.r;q.k=h.k;q.lx=lp.x;q.ly=lp.y;q.L=layerOf(h.k);if(q.vol==null)q.vol=2+(Math.random()*6|0);q.ph=Math.random()*6;}
   function stain(x,r){
     for(var i=stains.length-1;i>=Math.max(0,stains.length-40);i--){var s=stains[i];if(Math.abs(s.x-x)<s.w*0.6){s.w=Math.min(2,s.w+r*0.9);s.h=Math.min(0.05,s.h+r*0.12);return;}}
     stains.push({x:x,w:r*5,h:0.01+r*0.4});if(stains.length>300)stains.shift();
@@ -500,21 +522,22 @@
         var c,p,b;
         if(e.t==='hit'){
           b=r.bodies[e.k];if(e.d>3.5)sfx('thud',e.d);
-          if(gore&&e.d>6){p=b.getWorldCenter();gush(p.x,p.y,0,0,Math.round((e.d-5)*5),0.8+0.15*e.d,1);r.bl[e.k]=Math.min(1,r.bl[e.k]+0.15);}
+          if(gore&&e.d>6){p=randPt(b);gL=layerOf(e.k);gush(p.x,p.y,0,0,Math.round((e.d-5)*5),0.8+0.15*e.d,1);splats(r,e.k,1+(e.d/4|0),0.012+0.003*(e.d-6));}
         }else if(e.t==='break'){
           c=r.rc[e.k];sfx('crunch',false);
-          if(gore){p=anchorA(c);gush(p.x,p.y,0,0.5,25,1.8,1);r.bl[r.bodies.indexOf(c.b)]+=0.35;}
+          if(gore){p=anchorA(c);var kb=r.bodies.indexOf(c.b);gL=layerOf(kb);gush(p.x,p.y,0,0.5,25,1.8,1);addDecal(r,kb,p,0.035);addDecal(r,r.bodies.indexOf(c.a),p,0.025);}
         }else if(e.t==='crush'){
           sfx('crunch',true);sfx('squelch');
           b=e.k===0?r.bodies[0]:r.rc[e.k].b;p=b.getWorldCenter();
-          if(gore){gush(p.x,p.y,0,1,140,2.4+0.12*e.d,1);gush(p.x,p.y,0,1.5,24,2.8,1,true);r.bl[r.bodies.indexOf(b)]=1;}
+          if(gore){var kc=r.bodies.indexOf(b);gL=layerOf(kc);gush(p.x,p.y,0,1,140,2.4+0.12*e.d,1);gush(p.x,p.y,0,1.5,24,2.8,1,true);r.bl[kc]=1;splats(r,kc,10,0.03);}
           if(e.k===0)r.headCrushed=true;
         }else if(e.t==='snap'){
           sfx('squelch');
-          if(gore){p=anchorA(r.rc[e.k]);gush(p.x,p.y,0,0.5,30,1.6,1);}
+          if(gore){p=anchorA(r.rc[e.k]);gL=layerOf(r.bodies.indexOf(r.rc[e.k].b));gush(p.x,p.y,0,0.5,30,1.6,1);}
         }else if(e.t==='sever'){
           c=r.rc[e.k];sfx('squelch');sfx('crunch',true);
-          if(gore){p=anchorA(c);gush(p.x,p.y,0,1,120,2.8,1);gush(p.x,p.y,0,1,14,2.2,1,true);r.bl[r.bodies.indexOf(c.a)]=Math.min(1,r.bl[r.bodies.indexOf(c.a)]+0.7);r.bl[r.bodies.indexOf(c.b)]=1;}
+          if(gore){p=anchorA(c);var ka=r.bodies.indexOf(c.a),kb2=r.bodies.indexOf(c.b);gL=layerOf(kb2);gush(p.x,p.y,0,1,120,2.8,1);gush(p.x,p.y,0,1,14,2.2,1,true);
+            for(var di=0;di<4;di++){addDecal(r,ka,p,0.04);addDecal(r,kb2,c.b.getWorldPoint(c.j.getLocalAnchorB()),0.04);}}
         }
       });
       if(r.ev)r.ev.length=0;
@@ -522,7 +545,7 @@
       var hurtLvl=r.dead||r.koT>0?0:Math.max(r.pain||0,r.cowering?0.3:0);
       if(hurtLvl>0.12&&!r.headCrushed&&!(r.inj&&r.inj.gone[0])&&Math.random()<dt*(0.8+2.5*Math.min(1,hurtLvl))&&parts.length<MAXP){
         var hd=r.bodies[0],S=r.scale||1,lx=0.055*(r.dir||1)*S,ly=0.03*S,e=hd.getWorldPoint(Vec2(lx,ly));
-        parts.push({x:e.x,y:e.y,vx:0,vy:0,r:(0.011+Math.random()*0.005)*S,g:false,t:true,life:4,hb:hd,lx:lx,ly:ly,hw:0.09*S,hh:0.115*S});
+        var tq={x:e.x,y:e.y,vx:0,vy:0,r:(0.011+Math.random()*0.005)*S,g:false,t:true,life:4,ck:true,L:0};stick(tq,{r:r,k:0,b:hd,f:hd.getFixtureList()});parts.push(tq);
       }
       if(!gore)return;
       // spurting stumps: pulses with the heartbeat, weaker and faster as the blood runs out; a dead heart just oozes
@@ -535,23 +558,27 @@
         if(bl<=0.02)return;
         var pa=anchorA(c),ca=c.a.getWorldCenter(),dx=pa.x-ca.x,dy=pa.y-ca.y,dl=Math.hypot(dx,dy)||1;
         var n=Math.round((1+6*beat)*Math.min(1,bl*1.5));
-        if(n)spray(pa,dx/dl,dy/dl,n,(0.8+3.2*beat)*Math.min(1,0.3+bl));
-        var pb=c.b.getWorldPoint(c.j.getLocalAnchorB());if(Math.random()<0.25)gush(pb.x,pb.y,0,0,1,0.3,1); // the torn-off piece drips
+        gL=layerOf(r.bodies.indexOf(c.a));if(n)spray(pa,dx/dl,dy/dl,n,(0.8+3.2*beat)*Math.min(1,0.3+bl));
+        var pb=c.b.getWorldPoint(c.j.getLocalAnchorB());if(Math.random()<0.25){gL=layerOf(r.bodies.indexOf(c.b));gush(pb.x,pb.y,0,0,1,0.3,1);} // the torn-off piece drips
         sp++;
       });
       if(newBeat&&sp)sfx('spurt',Math.min(1,bl+0.2));
-      var I=r.inj;if(I)for(var k=0;k<RS.NJ;k++)if(I.broken[k]&&Math.random()<0.04){var q=anchorA(r.rc[k]);gush(q.x,q.y,0,0,1,0.2,1);} // open fractures drip
+      var I=r.inj;if(I)for(var k=0;k<RS.NJ;k++)if(I.broken[k]&&Math.random()<0.04){var q=anchorA(r.rc[k]);gL=layerOf(r.bodies.indexOf(r.rc[k].b));gush(q.x,q.y,0,0,1,0.2,1);} // open fractures drip
     });
     // particles: fall, land on the ground (stain + tiny splat sound)
     for(var i=parts.length-1;i>=0;i--){
       var q=parts[i];
-      if(q.hb){ // a tear still on the face: runs slowly downhill over the head, then drips off
-        var ha=q.hb.getAngle(),c=Math.cos(ha),sn=Math.sin(ha);q.lx+=-sn*0.12*dt;q.ly+=-c*0.12*dt;q.life-=dt;
-        var wp=q.hb.getWorldPoint(Vec2(q.lx,q.ly));q.x=wp.x;q.y=wp.y;
-        if(Math.abs(q.lx)>q.hw||Math.abs(q.ly)>q.hh||q.life<2.5){var hv=q.hb.getLinearVelocity();q.vx=hv.x;q.vy=hv.y;q.hb=null;}
-        else continue;
+      if(q.on){ // running over the skin: trickles downhill across the part (leaving a smear), drips off the edge
+        var b=q.on,ha=b.getAngle(),c=Math.cos(ha),sn=Math.sin(ha),spd=q.t?0.12:0.16,wob=0.35*Math.sin(q.ph+=dt*5);
+        q.lx+=(-sn+wob*c)*spd*dt;q.ly+=(-c-wob*sn)*spd*dt;
+        var wp=b.getWorldPoint(Vec2(q.lx,q.ly));q.x=wp.x;q.y=wp.y;q.life-=q.t?dt:dt*0.4;
+        if(!q.t){q.tr=(q.tr||0)+spd*dt;if(q.tr>0.018){q.tr=0;addDecalL(q.rig,q.k,q.lx,q.ly,q.r*0.8);q.vol--;}}
+        if(q.life<=0||(!q.t&&q.vol<=0)||rigs.indexOf(q.rig)<0){parts.splice(i,1);continue;}
+        if(q.fx.testPoint(wp))continue;
+        var hv=b.getLinearVelocityFromWorldPoint(wp);q.vx=hv.x;q.vy=hv.y;q.skip=b;q.skT=0.12;q.on=null;
       }
       q.vy-=10*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt;
+      if(q.ck&&!q.g){if(q.skT>0)q.skT-=dt;var h=hitBody(q);if(h){stick(q,h);continue;}}
       if(q.y<=q.r*0.5){
         if(q.g){q.y=q.r*0.5;q.vy*=-0.25;q.vx*=0.5;if(Math.abs(q.vy)<0.2){stain(q.x,q.r*0.8);q.life=Math.min(q.life,0);}}
         else if(q.t)q.life=0;
@@ -605,23 +632,39 @@
       ctx.save();ctx.translate(c[0],c[1]);ctx.rotate(c[4]);ctx.fillRect(-c[2]/2,-c[3]/2,c[2],c[3]);ctx.restore();});
     ctx.restore();
   }
-  function drawFlesh(far){ // filled, shaded body parts; paler as it bleeds out, bloodied where hurt
+  function bodyPat(pat,b,px){ // pattern stuck to a body part (moves and turns with it), px pattern pixels per metre
+    var o=toScreen(b.getPosition()),k=cam.z/px,a=b.getAngle(),c=Math.cos(a),sn=Math.sin(a);
+    if(pat.setTransform)pat.setTransform(new DOMMatrix([k*c,-k*sn,-k*sn,-k*c,o.x,o.y]));
+    return pat;
+  }
+  function drawDecals(b,D,far){
+    ctx.fillStyle=far?'rgba(80,4,7,0.9)':'rgba(112,6,10,0.88)';ctx.beginPath();
+    for(var i=0;i<D.length;i++){var d=D[i],p=toScreen(b.getWorldPoint(Vec2(d.x,d.y))),rr=Math.max(1,d.s*cam.z);
+      ctx.moveTo(p.x+rr,p.y);ctx.arc(p.x,p.y,rr,0,7);
+      var ox=Math.cos(d.a)*rr*0.9,oy=Math.sin(d.a)*rr*0.9;ctx.moveTo(p.x+ox+rr*0.55,p.y+oy);ctx.arc(p.x+ox,p.y+oy,rr*0.55,0,7);
+      ctx.moveTo(p.x-oy*0.8+rr*0.4,p.y+ox*0.8);ctx.arc(p.x-oy*0.8,p.y+ox*0.8,rr*0.4,0,7);}
+    ctx.fill();
+  }
+  function drawFlesh(L,far){ // filled, shaded body parts of one layer; paler as it bleeds out, blood splats where hurt
     rigs.forEach(function(r){
       var bl=r.blood==null?1:r.blood,base=mix(r.skin||SKIN,PALE,Math.min(1,(1-bl)*1.4+(r.dead?0.35:0)));
       r.bodies.forEach(function(b,k){
+        if(layerOf(k)!==L)return;
         var u=b.getUserData()||{};if(!!u.far!==far)return;
         var f=b.getFixtureList();if(!f)return;
         if(k===0&&r.headCrushed){drawCrushedHead(b,base,far);return;}
-        var c=mix(base,BLOOD,Math.min(0.85,(r.bl?r.bl[k]:0)*0.8));
-        ctx.beginPath();polyPath(b,f.getShape());ctx.fillStyle=rgb(c,far?0.72:1);ctx.fill();ctx.fillStyle=worldPat(skinPattern(),64);ctx.fill();
+        var c=mix(base,BLOOD,Math.min(0.3,(r.bl?r.bl[k]:0)*0.3)); // only a crushed part darkens all over
+        ctx.beginPath();polyPath(b,f.getShape());ctx.closePath();ctx.fillStyle=rgb(c,far?0.72:1);ctx.fill();ctx.fillStyle=bodyPat(skinPattern(),b,64);ctx.fill();
+        var D=r.dec&&r.dec[k];if(D&&D.length){ctx.save();ctx.clip();drawDecals(b,D,far);ctx.restore();ctx.beginPath();polyPath(b,f.getShape());ctx.closePath();}
         ctx.strokeStyle='#1b1b1d';ctx.lineWidth=Math.max(1,0.012*cam.z);ctx.stroke();
-        if(k===1)drawNumber(r); // under the near arm
+        if(k===1)drawNumber(r);
       });
     });
   }
-  function drawStrands(){ // red strings of muscle and gut still joining a torn-off limb to the stump
+  function drawStrands(L){ // red strings of muscle and gut still joining a torn-off limb to the stump
     rigs.forEach(function(r){
       (r.strands||[]).forEach(function(s){
+        if(layerOf(s.k+1)!==L)return;
         var a=toScreen(s.A.getWorldPoint(s.la)),b=toScreen(s.B.getWorldPoint(s.lb)),dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1;
         var slack=Math.max(0,s.L*cam.z-d),taut=Math.min(1,d/(s.L*cam.z+1e-6));
         for(var i=0;i<s.n;i++){
@@ -636,13 +679,15 @@
     });
     ctx.lineCap='butt';
   }
-  function drawBlood(){
+  function drawBlood(L){
+    var i,q,sc,rr;
     ctx.fillStyle='#8a0a0a';ctx.beginPath();
-    for(var i=0;i<parts.length;i++){var q=parts[i];if(q.g||q.t)continue;var s=toScreen(q);var rr=Math.max(1.2,q.r*cam.z);ctx.rect(s.x-rr/2,s.y-rr/2,rr,rr);}
+    for(i=0;i<parts.length;i++){q=parts[i];if(q.g||q.t||(q.L==null?2:q.L)!==L)continue;sc=toScreen(q);rr=Math.max(1.2,q.r*cam.z);
+      if(q.on){ctx.moveTo(sc.x+rr*0.6,sc.y);ctx.arc(sc.x,sc.y,rr*0.6,0,7);}else ctx.rect(sc.x-rr/2,sc.y-rr/2,rr,rr);}
     ctx.fill();ctx.fillStyle='#74c0f0';ctx.beginPath(); // tears
-    for(i=0;i<parts.length;i++){q=parts[i];if(!q.t)continue;s=toScreen(q);rr=Math.max(2.5,q.r*cam.z);ctx.moveTo(s.x+rr/2,s.y);ctx.arc(s.x,s.y,rr/2,0,7);}
+    for(i=0;i<parts.length;i++){q=parts[i];if(!q.t||(q.L==null?2:q.L)!==L)continue;sc=toScreen(q);rr=Math.max(2.5,q.r*cam.z);ctx.moveTo(sc.x+rr/2,sc.y);ctx.arc(sc.x,sc.y,rr/2,0,7);}
     ctx.fill();ctx.fillStyle='#5a0505';ctx.beginPath();
-    for(i=0;i<parts.length;i++){q=parts[i];if(!q.g)continue;s=toScreen(q);rr=Math.max(2,q.r*cam.z);ctx.moveTo(s.x+rr,s.y);ctx.arc(s.x,s.y,rr,0,7);}
+    for(i=0;i<parts.length;i++){q=parts[i];if(!q.g||(q.L==null?2:q.L)!==L)continue;sc=toScreen(q);rr=Math.max(2,q.r*cam.z);ctx.moveTo(sc.x+rr,sc.y);ctx.arc(sc.x,sc.y,rr,0,7);}
     ctx.fill();
   }
   function draw(){
@@ -657,9 +702,8 @@
     for(gyy=Math.ceil(g0.y);gyy<=g1.y;gyy++){var sy=toScreen(Vec2(0,gyy)).y;ctx.moveTo(0,sy);ctx.lineTo(W,sy);}
     ctx.stroke();ctx.restore();
     drawGround(gy);
-    drawFlesh(true);if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;}drawFlesh(false);if(opt('oBox'))drawBodies(false);
-    drawStrands();
-    drawBlood();
+    for(var L=0;L<3;L++){drawFlesh(L,true);drawFlesh(L,false);drawStrands(L);drawBlood(L);} // body, then legs, then arms on top
+    if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;drawBodies(false);}
     { // name above the head (only once you've named them)
       ctx.font='600 13px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
       rigs.forEach(function(r){if(!r.name)return;var hp=toScreen(r.bodies[0].getPosition());ctx.fillText(r.name,hp.x,hp.y-0.2*cam.z);});

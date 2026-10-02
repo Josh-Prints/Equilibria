@@ -189,3 +189,11 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Limb crush threshold is now `crushLimb` 11.5 (was the shared 13; the head stays at `crushImp` 13). `ripImp` went from 22 to 19.
 - Strands (`FLAGS.strands`, tuned in v0.1.10 to barely hold): `sever()` swaps the revolute joint for a RopeJoint that starts at 0.06 m. `strandStep` smooths the rope force (EMA 0.06) against the hanging limb weight `wt`. Above 0.7 wt the strand sags longer. Above 1.8 wt (after 0.3 s grace), or past its 0.3-0.45 m max, it snaps (ev `snap`). ui.js `drawStrands` draws 2-4 sagging red strings per strand. Note: planck's RopeJoint.getReactionForce throws before its first step, so that call is wrapped in try/catch.
 - Slow wake-up: when a KO ends, `rig.groggy` is set to `groggyT` (5 s). During that time stiffness is capped by a ramp from 0.03 up to 1, and getting up waits until the ramp passes 0.3. The HUD shows "Waking up".
+
+## v0.1.11: layers, body-pinned skin, blood splats, running drips
+- Draw order is now by layer (`layerOf(k)`): 0 head and torso, 1 legs, 2 arms. Far bodies are drawn before near ones within each layer. Strands are drawn on their limb's layer, and particles on the layer they came from (`q.L`).
+- The skin speckle is pinned to each body with `bodyPat`, so it moves and turns with the part instead of staying fixed in the world.
+- Blood splats: `r.dec[k]` holds splats in the body's local coordinates, drawn clipped to the part. Hits, breaks, crushes and severs add splats; the whole-part tint (`r.bl`) is now capped at 0.3 and only crushes push it there.
+- Running drips: about 35% of blood drops (20% of spray, all tears) are "stickers". When one is inside a body part (`hitBody`), it sticks (`q.on`), trickles downhill over the part leaving smear splats, drips off the edge, and can land on the next part down. Tears run the same way but leave no smear.
+- Crush thresholds are per part: head `crushImp` 15, limbs `CRUSHL`=[4,7,11,5,4.5,11] (upper arm, forearm, hand, thigh, shin, foot) × `crushLimb`. A limb rips off at ×`ripImp` (1.6). Big parts barely change speed when they hit, which is why their numbers are low.
+- Knockouts last longer: a head KO is 5+3·excess s, a pain KO 6-10 s.
