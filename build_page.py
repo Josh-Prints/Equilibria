@@ -1,5 +1,6 @@
 sim=open(__import__('os').path.join(__import__('os').path.dirname(__file__),'sim.js')).read()
 ui=open(__import__('os').path.join(__import__('os').path.dirname(__file__),'ui.js')).read()
+detw=open(__import__('os').path.join(__import__('os').path.dirname(__file__),'det_weights.js')).read()
 html='''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -37,7 +38,8 @@ details button{font-size:14px;padding:8px 12px}
   <canvas id="chart" width="440" height="140"></canvas>
   <label>Pairs <input type="number" id="nPairs" value="16" min="2" max="64"> Scenarios <input type="number" id="nScen" value="3" min="1" max="8"></label>
   <label>Workers <input type="number" id="nWork" value="-1" min="-1" max="16"> <span style="opacity:.6">-1 = auto, 0 = none</span></label>
-  <label><input type="checkbox" id="oUse"> Use policy (watch it)</label>
+  <label><input type="checkbox" id="oNN" checked> Neural reactions (shows what it senses)<label>
+  <label><input type="checkbox" id="oUse"> Use old ES policy (watch it)</label>
   <label><input type="checkbox" id="oReflex" checked> Balance reflex</label>
   <label><input type="checkbox" id="oBal2" checked> New balance + recovery steps</label>
   <label><input type="checkbox" id="oStep" checked> Old step reflex (if New balance off)</label>
@@ -70,7 +72,7 @@ details button{font-size:14px;padding:8px 12px}
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
-'''+sim+'''
+'''+detw+sim+'''
 </script>
 <script>
 '''+ui+'''
