@@ -12,7 +12,7 @@ var RS_DETW={"mu":[-0.0067241,-0.00027025,0.0024076,0.00022175,0.0021074,-0.0000
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:15,crushLimb:1.1,ripImp:1.6,shatter:1,strands:1,groggyT:5,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:15,crushLimb:1.25,ripImp:1.6,shatter:1,strands:1,groggyT:5,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -164,6 +164,13 @@ var RS=(function(){
     for(var i=0;i<cs.length;i++){
       var c=cs[i],ks=st[i];
       if(r.inj&&r.inj.gone[i])continue; // torn off
+      var sl=0;
+      if(r.inj&&r.inj.blo[i]!=null){ // broken: soft ends to the new range, it slows down (and is pushed back) near them
+        var a=c.j.getJointAngle(),w=c.j.getJointSpeed(),m=0.45,lo=r.inj.blo[i],hi=r.inj.bhi[i],p;
+        if(a<lo+m){p=(lo+m-a)/m;sl=c.max*0.5*p*p-(w<0?c.kd*3*p*w:0);}
+        else if(a>hi-m){p=(a-(hi-m))/m;sl=-c.max*0.5*p*p-(w>0?c.kd*3*p*w:0);}
+      }
+      if(sl){c.b.applyTorque(sl,true);c.a.applyTorque(-sl,true);}
       var t=c.kp*ks*(c.target-c.j.getJointAngle())-c.kd*Math.sqrt(ks)*c.j.getJointSpeed();
       var mx=c.max*ks;
       if(t>mx)t=mx;else if(t<-mx)t=-mx;
@@ -497,7 +504,7 @@ var RS=(function(){
       var j=rig.ctrls[k].j,jt=JT[k],a=j.getJointAngle();
       if(!loose&&(a<jt.lo||a>jt.hi))return; // wait until it is back inside the normal range (no snap)
     }
-    for(k in GU_LOOSE){var lim=GU_LOOSE[k],q=JT[k];rig.ctrls[k].j.setLimits(lim<0&&loose?lim:q.lo,lim>0&&loose?lim:q.hi);}
+    for(k in GU_LOOSE){var lim=GU_LOOSE[k],q=JT[k];if(rig.inj&&rig.inj.blo[k]!=null)continue;rig.ctrls[k].j.setLimits(lim<0&&loose?lim:q.lo,lim>0&&loose?lim:q.hi);}
     rig.guLoose=loose;
   }
   var GU={
@@ -617,12 +624,16 @@ var RS=(function(){
   var BRK=[130,115,115, 60,60,60,105,100,80, 60,60,60,105,100,80],SEV=95;
   var JNAMES=['neck','upper back','lower back','far shoulder','far elbow','far wrist','far hip','far knee','far ankle','near shoulder','near elbow','near wrist','near hip','near knee','near ankle'];
   var KIDS=[[0],[1],[2],[3,4,5],[4,5],[5],[6,7,8],[7,8],[8],[9,10,11],[10,11],[11],[12,13,14],[13,14],[14]];
-  function injOf(rig){return rig.inj||(rig.inj={load:new Float64Array(NJ),pull:new Float64Array(NJ),broken:new Uint8Array(NJ),gone:new Uint8Array(NJ),t:0});}
+  function injOf(rig){return rig.inj||(rig.inj={load:new Float64Array(NJ),pull:new Float64Array(NJ),broken:new Uint8Array(NJ),gone:new Uint8Array(NJ),blo:new Array(NJ).fill(null),bhi:new Array(NJ).fill(null),t:0});}
   function hurt(rig){var I=rig.inj;if(!I)return false;for(var k=0;k<NJ;k++)if(I.broken[k]||I.gone[k])return true;return false;}
   function breakBone(rig,k,on){
     var I=injOf(rig);if(I.gone[k]||!!I.broken[k]===!!on)return;
     I.broken[k]=on?1:0;
-    if(on){rig.ctrls[k].j.enableLimit(false);if(k===0)rig.dead=true;ev(rig,'break',k);}
+    if(on){ // a broken joint gets a random amount of extra range each way (not a free spin); pdRig softens the new ends
+      var jt=JT[k],ex1=0.5+Math.random()*1.3,ex2=0.5+Math.random()*1.3,lo=jt.lo-ex1,hi=jt.hi+ex2,sp=hi-lo;
+      if(sp>5.6){lo+=(sp-5.6)/2;hi-=(sp-5.6)/2;}
+      I.blo[k]=lo;I.bhi[k]=hi;rig.ctrls[k].j.setLimits(lo,hi);rig.ctrls[k].j.enableLimit(true);
+      if(k===0)rig.dead=true;ev(rig,'break',k);}
     else rig.age=Math.min(rig.age,0.3); // healed: the limit comes back once the joint is inside its range again (below)
   }
   function addStrand(rig,k,A,B,la,lb,wt,o){ // a bundle of strings (one rope) between two bodies
@@ -743,6 +754,7 @@ var RS=(function(){
         if(FLAGS.inj&&!I.broken[k]&&I.load[k]>BRK[k])breakBone(rig,k,true);
         if(FLAGS.sever&&k>=3&&I.pull[k]>SEV){sever(rig,k);continue;}
       }
+      if(!I.broken[k]&&I.blo[k]!=null){var a0=j.getJointAngle();if(a0>=JT[k].lo&&a0<=JT[k].hi){j.setLimits(JT[k].lo,JT[k].hi);I.blo[k]=I.bhi[k]=null;}else{I.blo[k]=Math.min(JT[k].lo,a0);I.bhi[k]=Math.max(JT[k].hi,a0);j.setLimits(I.blo[k],I.bhi[k]);}} // healed: normal range once back inside it
       if(!I.broken[k]&&!j.isLimitEnabled()){var a=j.getJointAngle();if(a>=j.getLowerLimit()&&a<=j.getUpperLimit())j.enableLimit(true);}
     }
     if(FLAGS.inj&&I.t>0.2&&(rig.impS||0)>9)breakBone(rig,rig.impSk===1?1:2,true); // landing flat and hard on the back/front: spine fracture
