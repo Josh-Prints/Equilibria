@@ -1,7 +1,7 @@
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -518,14 +518,24 @@ var RS=(function(){
   // Pushes from the buttons don't count: the chest isn't touching the ground when it's shoved.
   var COWER=[-0.45,-0.5,-0.4, 2.3,2.4,0.6, 1.7,-2.3,0.3]; // chin tucked, back curled, arms folded over the head, knees up
   function onGround(b){for(var c=b.getContactList();c;c=c.next)if(c.contact.isTouching()&&c.other.isStatic())return true;return false;}
-  function cower(rig,tt,dt){
-    var ps=rig.parts,ids=[0,1,3],imp=0,k;
-    if(!rig.cpv)rig.cpv=[0,0,0,0,0,0];
-    for(var q=0;q<3;q++){
-      var v=ps[ids[q]].getLinearVelocity();
-      if(onGround(ps[ids[q]]))imp=Math.max(imp,Math.hypot(v.x-rig.cpv[2*q],v.y-rig.cpv[2*q+1]));
-      rig.cpv[2*q]=v.x;rig.cpv[2*q+1]=v.y;
+  // ground impacts this tick (velocity change of a part while it touches the ground; pushes don't count because the
+  // shoved chest isn't on the ground): impT = worst of head/chest/pelvis (cowering), impD = worst of any part with
+  // head hits counting 1.4x (dying)
+  function impacts(rig){
+    var ps=rig.parts,n=ps.length,k;
+    if(!rig.cpv)rig.cpv=new Float64Array(2*n);
+    var it=0,id=0,live=(rig.ticks=(rig.ticks||0)+1)>12; // ignore the settle right after spawning
+    for(k=0;k<n;k++){
+      var v=ps[k].getLinearVelocity(),d=0;
+      if(live&&onGround(ps[k]))d=Math.hypot(v.x-rig.cpv[2*k],v.y-rig.cpv[2*k+1]);
+      rig.cpv[2*k]=v.x;rig.cpv[2*k+1]=v.y;
+      if(k===0||k===1||k===3)it=Math.max(it,d);
+      id=Math.max(id,k===0?1.4*d:d);
     }
+    rig.impT=it;rig.impD=id;
+  }
+  function cower(rig,tt,dt){
+    var imp=rig.impT||0,k;
     if(imp>FLAGS.cowerImp&&(rig.cowT||0)<0.5){rig.cowT=Math.min(3.5,1.5+0.6*(imp-FLAGS.cowerImp));rig.cowA=0;rig.gu.ph=-1;}
     if(!(rig.cowT>0))return false;
     rig.cowT-=dt;rig.cowA=(rig.cowA||0)+dt;
@@ -536,6 +546,27 @@ var RS=(function(){
       rig.rs[k]=rig.stiff[k]=0.75;
     }
     return true;
+  }
+
+  // DIE (FLAGS.die): an impact above dieImp kills it: every joint goes limp (just a little friction) for good.
+  function goLimp(rig,out){
+    for(var k=0;k<NJ;k++){rig.rs[k]=rig.stiff[k]=0.003;var a=rig.ctrls[k].j.getJointAngle();rig.tgt[k]=a;rig.ctrls[k].target=a;}
+    rig.gu.ph=-1;rig.cowering=false;return out;
+  }
+
+  // PROTECT HEAD (FLAGS.protect): while falling toward the ground (detector says falling, or it's in the air), with the
+  // head coming down, bring the forearms up around the head and tuck the chin; held a moment after it lands.
+  // falling forward: forearms up in front of the face (a guard); otherwise: hands behind the head
+  var COVER_F={0:-0.4,3:1.5,4:2.2,9:1.4,10:2.3},COVER_B={0:-0.45,3:2.6,4:2.3,9:2.5,10:2.4};
+  function protectHead(rig,tt,dt){
+    var h=rig.parts[0],hp=h.getPosition(),hv=h.getLinearVelocity();
+    var falling=(rig.dp[2]>0.4||rig.airT>0.2)&&hv.y<-0.8&&hp.y<1.45&&hp.y>0.3;
+    if(falling){rig.protT=0.35;rig.protF=wrap(rig.parts[1].getAngle())<-0.3||hv.x>0.5;}
+    else rig.protT=Math.max(0,(rig.protT||0)-dt);
+    var want=rig.protT>0?1:0;rig.prot=(rig.prot||0)+(want-(rig.prot||0))*(want?0.3:0.08);
+    if(rig.prot<0.01)return;
+    var C=rig.protF?COVER_F:COVER_B;
+    for(var k in C){tt[k]+=(C[k]-tt[k])*rig.prot;if(k>0){rig.rs[k]=Math.max(rig.rs[k],0.6*rig.prot);rig.stiff[k]=rig.rs[k];}}
   }
 
   // run the policy: stiffness + filtered PD targets, with a fixed balance reflex underneath (only when upright on the feet)
@@ -588,12 +619,16 @@ var RS=(function(){
       else if(k===0)t+=neck;else if(k===3||k===9)t+=sh;else if(k===4||k===10)t+=el;
       tt[k]=t;
     }
+    if(rf&&(FLAGS.cower||FLAGS.die))impacts(rig);
+    if(rf&&FLAGS.die&&rig.impD>FLAGS.dieImp)rig.dead=true;
+    if(rig.dead)return goLimp(rig,out);
     var cowering=rf&&FLAGS.cower&&cower(rig,tt,dt);rig.cowering=!!cowering;
     var gettingUp=!cowering&&rf&&FLAGS.getup&&getUp(rig,tt,dt);
     guLimits(rig,!!gettingUp);
     rig.b2ok=!cowering&&!gettingUp&&rf&&FLAGS.bal2?bal2(rig,tt,out,ca,dt):false;
     if(!cowering&&!gettingUp&&rf&&!FLAGS.bal2&&FLAGS.step)stepReflex(rig,tt,ca,dt);
     if(!cowering&&!gettingUp&&rf&&FLAGS.nn)nnReact(rig,tt,dt);
+    if(!cowering&&!gettingUp&&rf&&FLAGS.protect)protectHead(rig,tt,dt);
     // target smoothing: the network can slow it down (smoother) or speed it up; soft start eases in after spawning
     var al=clampA(FILT*(1+0.6*out[O_FILT]),1);
     if(rig.age<FLAGS.softT){var x=rig.age/FLAGS.softT;al*=0.04+0.96*x*x*(3-2*x);}
