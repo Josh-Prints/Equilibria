@@ -647,6 +647,7 @@ var RS=(function(){
     var I=injOf(rig);if(I.gone[j])return;
     var rj=rig.ctrls[j].j,rj=rj._r||rj,B=rj.getBodyB(),lb=rj.getLocalAnchorB(),w=B.getWorld(),k=j+1;
     var nx=j%3<2&&!I.gone[j+1]?rig.ctrls[j+1].j:null,nr=nx?(nx._r||nx):null,C=nr?nr.getBodyB():null,ncA=nr?nr.getLocalAnchorA():null,ncB=nr?nr.getLocalAnchorB():null;
+    var old=(rig.strands||[]).filter(function(s){return s.A===B||s.B===B;}); // strings already tied to this part (e.g. a hand torn off earlier)
     sever(rig,j,hard&&Math.random()<0.5);
     if(nr){w.destroyJoint(nr);}
     var f=B.getFixtureList(),vs=f.getShape().m_vertices,hx=0,hy=0,i;for(i=0;i<vs.length;i++){hx=Math.max(hx,Math.abs(vs[i].x));hy=Math.max(hy,Math.abs(vs[i].y));}
@@ -654,7 +655,7 @@ var RS=(function(){
     var n=2+(Math.random()*(hard?3:2)|0),cuts=[0],t=0;for(i=1;i<n;i++){t+=(1/n)*(0.75+0.5*Math.random());cuts.push(Math.min(0.9,t));}cuts.push(1);
     var den=f.getDensity(),fr=f.getFriction(),g=f.getFilterGroupIndex(),ud=B.getUserData(),ang=B.getAngle(),av=B.getAngularVelocity();
     function seg(a,b){var c=sgn*half*(1-(a+b)),h=half*(b-a);return {c:c,h:h};} // along the axis, from the joint end
-    var prev=null,prevEnd=null,pieces=[];
+    var prev=null,prevEnd=null,pieces=[],sgs=[];
     for(i=0;i<n;i++){
       var sg=seg(cuts[i],cuts[i+1]),lc=ax?Vec2(0,sg.c):Vec2(sg.c,0),hb=ax?Box(thick*(0.85+0.15*Math.random()),sg.h*0.92,lc,0):Box(sg.h*0.92,thick*(0.85+0.15*Math.random()),lc,0),body;
       if(i===0){B.destroyFixture(f);B.createFixture(hb,{density:den,friction:fr,restitution:0,filterGroupIndex:g});body=B;}
@@ -668,8 +669,18 @@ var RS=(function(){
       }
       var near=ax?Vec2(lc.x,lc.y+sgn*sg.h*0.9):Vec2(lc.x+sgn*sg.h*0.9,lc.y),far=ax?Vec2(lc.x,lc.y-sgn*sg.h*0.9):Vec2(lc.x-sgn*sg.h*0.9,lc.y);
       if(prev&&Math.random()>(hard?0.55:0.3))addStrand(rig,j,prev,body,prevEnd,near,Math.min(prev.getMass(),body.getMass())*10,{L:0.03,n:3+(Math.random()*3|0),thin:true,minW:1.5,max:0.15+0.15*Math.random()});
-      pieces.push(body);prev=body;prevEnd=far;
+      pieces.push(body);prev=body;prevEnd=far;sgs.push(sg);
     }
+    // re-tie the old strings to whichever piece now has their end (else they'd hang off empty space where the part was)
+    old.forEach(function(s){
+      var aSide=s.A===B,la=aSide?s.la:s.lb,u=ax?la.y:la.x,bi=0,bd=1e9;
+      sgs.forEach(function(g,q){var d=Math.abs(u-g.c)-g.h;if(d<bd){bd=d;bi=q;}});
+      var g=sgs[bi],uc=Math.max(g.c-g.h*0.9,Math.min(g.c+g.h*0.9,u)),P=pieces[bi],wp=B.getWorldPoint(ax?Vec2(la.x,uc):Vec2(uc,la.y)),nl=P.getLocalPoint(wp);
+      if(P===B&&uc===u)return;
+      try{w.destroyJoint(s.j);}catch(e){}
+      s.age=0;if(aSide){s.A=P;s.la=Vec2(nl.x,nl.y);}else{s.B=P;s.lb=Vec2(nl.x,nl.y);}
+      s.j=w.createJoint(planck.RopeJoint({maxLength:s.L,localAnchorA:s.la,localAnchorB:s.lb},s.A,s.B));
+    });
     if(C){ // whatever hung off the far end (hand, foot, forearm...) stays in one piece
       var last=pieces[pieces.length-1];
       if(Math.random()>(hard?0.5:0.25))addStrand(rig,j,last,C,prevEnd,ncB,C.getMass()*10,{L:0.04,n:3+(Math.random()*2|0),thin:true,minW:2});
