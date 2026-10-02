@@ -35,7 +35,8 @@ details button{font-size:14px;padding:8px 12px}
   <canvas id="chart" width="440" height="140"></canvas>
   <label>Pairs <input type="number" id="nPairs" value="16" min="2" max="64"> Scenarios <input type="number" id="nScen" value="3" min="1" max="8"></label>
   <label>Workers <input type="number" id="nWork" value="-1" min="-1" max="16"> <span style="opacity:.6">-1 = auto, 0 = none</span></label>
-  <label><input type="checkbox" id="oNN" checked> Neural reactions (shows what it senses)<label>
+  <label><input type="checkbox" id="oNN" checked> Neural reactions (shows what it senses)</label>
+  <label><input type="checkbox" id="oGetup" checked> Get up when down (needs Neural reactions)</label>
   <label><input type="checkbox" id="oUse"> Use old ES policy (watch it)</label>
   <label><input type="checkbox" id="oReflex" checked> Balance reflex</label>
   <label><input type="checkbox" id="oBal2" checked> New balance + recovery steps</label>
@@ -74,7 +75,7 @@ var RS_DETW={"mu":[-0.0067241,-0.00027025,0.0024076,0.00022175,0.0021074,-0.0000
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -186,7 +187,7 @@ var RS=(function(){
     var soft=FLAGS.soft&&Math.abs(ra)<0.3&&(o.h||0)<0.05,tgt0=new Float64Array(NJ); // soft start (only when spawned upright on the feet): PD targets begin at the spawn pose
     if(soft)for(i=0;i<NJ;i++)tgt0[i]=pose[i];
     return {parts:bodies,feet:feet,ctrls:ctrls,stiff:new Float64Array(NJ).fill(1),tgt:tgt0,age:soft?0:1e9,prevO:new Float64Array(NO),prevO2:new Float64Array(NO),prevW:new Float64Array(NJ),
-      lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:new Float64Array(NJ).fill(1),fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},dh:[],dp:new Float64Array([1,0,0,0,0]),wph:0,wph2:0,lph:0,wsg:1,b2ok:false,nz:new Float64Array(10),nr:rngMake(12345),st2:{ph:0,t:0,leg:0,next:0,calm:0,x0:0,xl:0,Ts:0.25,clr:0.09,dir:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
+      lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:new Float64Array(NJ).fill(1),fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},gu:{ph:-1,t:0,downT:0,tries:0,seq:'prone',from:null},dh:[],dp:new Float64Array([1,0,0,0,0]),wph:0,wph2:0,lph:0,wsg:1,b2ok:false,nz:new Float64Array(10),nr:rngMake(12345),st2:{ph:0,t:0,leg:0,next:0,calm:0,x0:0,xl:0,Ts:0.25,clr:0.09,dir:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
   }
 
   // PD: torque = kp*(target-angle) - kd*angularVelocity, clamped. Per-joint stiffness scales kp, kd, and the torque cap.
@@ -504,6 +505,76 @@ var RS=(function(){
     }
   }
 
+  // =====================================================================
+  // GET UP (FLAGS.getup): when the detector says "down" and the body has settled, get up the way people do.
+  //  on the back: rock up to sitting with a leg swing -> tuck the feet in and fold forward over them -> crouch on the
+  //  feet -> stand, then hand back to balance once the knees are nearly straight (easing into its targets, no snap).
+  //  face down: no sequence yet (prone is empty, so it stays down).
+  // Stages blend toward a target pose; some hold the trunk at a set angle in WORLD frame with the hips (so it adapts
+  // to how it is lying). Stages were found by evolution strategies in the sim (one move at a time: sit, crouch, stand).
+  // If it slumps back down or is still low at the end, it starts over once it settles.
+  // Stage poses are channels: neck, upper spine, lower spine, shoulder, elbow, wrist, hip, knee, ankle (both sides);
+  // n = extra [hip, knee, ankle] for the near leg only (one foot forward); trunk = wanted pelvis angle in world frame
+  // (held with the hips, weight tw) or null; T = seconds to blend into the pose. Poses were optimised in the sim.
+  // =====================================================================
+  // Getting up needs more forward bend than the normal limits allow (to get the weight over the feet from sitting),
+  // so while it gets up the hips may flex to 2.8 (normally 2.4) and the spine curl to -0.8/-0.6 (normally -0.5/-0.4).
+  var GU_LOOSE={1:-0.8,2:-0.6,6:2.8,12:2.8};
+  function guLimits(rig,loose){
+    if(!!rig.guLoose===loose)return;
+    for(var k in GU_LOOSE){
+      var j=rig.ctrls[k].j,jt=JT[k],a=j.getJointAngle();
+      if(!loose&&(a<jt.lo||a>jt.hi))return; // wait until it is back inside the normal range (no snap)
+    }
+    for(k in GU_LOOSE){var lim=GU_LOOSE[k],q=JT[k];rig.ctrls[k].j.setLimits(lim<0&&loose?lim:q.lo,lim>0&&loose?lim:q.hi);}
+    rig.guLoose=loose;
+  }
+  var GU={
+    prone:[
+
+    ],
+    supine:[
+      {T:0.44,a:[-0.22,0.15,0.1,2.08,0.13,0.05,1.17,-1.7,-0.59],n:[0.21,-0.23,-0.41],trunk:null,tw:0},
+      {T:0.61,a:[-0.41,-0.2,-0.38,0.98,0.04,-0.31,0.82,-0.81,0.06],n:[-0.38,0.85,0.04],trunk:null,tw:0},
+      {T:1.32,a:[0.02,-0.58,-0.31,1.56,0.06,-0.12,2.05,-1.31,0.53],n:[0,0.06,0.01],trunk:0.23,tw:0.86},
+      {T:0.42,a:[-0.58,-0.89,-0.33,1.78,-0.05,0.16,3.06,-2.24,0.43],n:[-0.04,0.07,0.19],trunk:-0.16,tw:1.08},
+      {T:0.41,a:[0.03,-0.49,-0.17,1.41,0.01,-0.07,3.47,-2.31,1.02],n:[-0.17,-0.34,0.25],trunk:-1.21,tw:1.5},
+      {T:0.41,a:[-0.07,-0.08,-1.15,1.95,0.09,-0.05,1.47,-2.86,0.8],n:[-0.05,-0.15,0.37],trunk:-0.45,tw:1.33},
+      {T:0.59,a:[0.22,-0.2,0.44,0.98,0.25,0.28,1.3,-1.2,0.17],n:[-0.56,-0.45,0.24],trunk:-0.32,tw:1.05},
+      {T:1,a:[-0.36,0.13,0.01,0.35,0.59,-0.48,0.74,-0.72,0.1],n:[-0.59,0.02,0.25],trunk:0.02,tw:1.13},
+      {T:0.64,a:[-0.11,0.04,-0.02,0.06,0.26,0.14,-0.05,0.18,0],n:[0.22,0.02,0.21],trunk:0.07,tw:1.02}
+    ]};
+  function getUp(rig,tt,dt){
+    var g=rig.gu,ps=rig.parts,hy=ps[0].getPosition().y,pa=wrap(ps[3].getAngle()),k;
+    if(g.ph<0){
+      var slow=Math.abs(rig.com.vx)<0.25&&Math.abs(ps[3].getAngularVelocity())<1.0;
+      g.downT=(rig.dp[4]>0.6&&slow&&hy<0.9)?g.downT+dt:0;
+      if(g.downT<0.8)return false;
+      g.seq=pa<0?'prone':'supine';if(!GU[g.seq].length)return false;g.ph=0;g.t=0;g.from=Float64Array.from(rig.tgt);g.base=new Float64Array(NJ);g.downT=0;g.peak=hy;
+    }
+    if(hy>1.5&&Math.cos(ps[1].getAngle())>0.9&&(rig.fc[0]||rig.fc[1])&&Math.abs(rig.ctrls[7].j.getJointAngle())<0.35&&Math.abs(rig.ctrls[13].j.getJointAngle())<0.35){
+      g.ph=-1;g.tries=0;rig.age=Math.min(rig.age,0.3);return false; // up on its feet: balance takes over, easing into its targets (no snap)
+    }
+    var S=GU[g.seq],st=S[g.ph];g.t+=dt;
+    var u=Math.min(1,g.t/st.T),sm=u*u*(3-2*u);
+    for(k=0;k<NJ;k++){
+      var c=k<3?k:3+((k-3)%6),v=st.a[c];if(st.n&&k>=12)v+=st.n[k-12];
+      tt[k]=g.base[k]=g.from[k]+(v-g.from[k])*sm;
+    }
+    if(st.trunk!=null){ // hips hold the pelvis at the wanted world angle (both legs that are on the ground)
+      var pw=ps[3].getAngularVelocity(),corr=clampA(1.2*(pa-st.trunk)+0.03*pw,0.8)*sm*(st.tw==null?1:st.tw);
+      tt[6]+=corr;tt[12]+=corr;
+    }
+    for(k=0;k<NJ;k++){rig.rs[k]=1;rig.stiff[k]=(JT[k].g===2&&(k%6)!==5)?FLAGS.guArm:1;} // arms push harder while getting up
+    if(g.t>=st.T+0.25){ // stage done: next one (or hand back once standing)
+      if(g.ph===S.length-1){g.ph=-1;if(hy<1.4){g.tries++;}else{g.tries=0;rig.age=Math.min(rig.age,0.3);}return hy>=1.4;}
+      g.from=Float64Array.from(g.base);g.ph++;g.t=0;
+    }
+    g.peak=Math.max(g.peak,hy);
+    if(hy<g.peak-0.5){g.ph=-1;g.tries++;} // slumped back down: start over once it settles
+    return true;
+  }
+
   // run the policy: stiffness + filtered PD targets, with a fixed balance reflex underneath (only when upright on the feet)
   function act(rig,theta,buf,rng,opt){
     opt=opt||{};
@@ -554,9 +625,11 @@ var RS=(function(){
       else if(k===0)t+=neck;else if(k===3||k===9)t+=sh;else if(k===4||k===10)t+=el;
       tt[k]=t;
     }
-    rig.b2ok=rf&&FLAGS.bal2?bal2(rig,tt,out,ca,dt):false;
-    if(rf&&!FLAGS.bal2&&FLAGS.step)stepReflex(rig,tt,ca,dt);
-    if(rf&&FLAGS.nn)nnReact(rig,tt,dt);
+    var gettingUp=rf&&FLAGS.getup&&getUp(rig,tt,dt);
+    guLimits(rig,!!gettingUp);
+    rig.b2ok=!gettingUp&&rf&&FLAGS.bal2?bal2(rig,tt,out,ca,dt):false;
+    if(!gettingUp&&rf&&!FLAGS.bal2&&FLAGS.step)stepReflex(rig,tt,ca,dt);
+    if(!gettingUp&&rf&&FLAGS.nn)nnReact(rig,tt,dt);
     // target smoothing: the network can slow it down (smoother) or speed it up; soft start eases in after spawning
     var al=clampA(FILT*(1+0.6*out[O_FILT]),1);
     if(rig.age<FLAGS.softT){var x=rig.age/FLAGS.softT;al*=0.04+0.96*x*x*(3-2*x);}
@@ -699,7 +772,7 @@ var RS=(function(){
     return {mean:sum/all.length,best:best};
   }
 
-  return {DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
+  return {DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},GU:GU,FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
     esNoise:esNoise,esStep:esStep,migrate:migrate,runEpisode:runEpisode,evalCandidate:evalCandidate,sampleScenario:sampleScenario,fk:fk,
     NP:NP,NI:NI,NO:NO,NJ:NJ,DT:DT,SUB:SUB,POLICY_HZ:POLICY_HZ,VEL_IT:VEL_IT,POS_IT:POS_IT,JT:JT,ORDER:ORDER,CASES:CASES,wrap:wrap};
 })();
@@ -792,7 +865,7 @@ var RS=(function(){
   }
 
   // training and Test use whichever reflexes are ticked (a policy learns to work together with them)
-  function reflexCfg(){return {noReflex:!opt('oReflex'),flags:{nn:opt('oNN')?1:0,bal2:opt('oBal2')?1:0,step:opt('oStep')?1:0,air:opt('oFall')?1:0,land:opt('oFall')?1:0,fall:opt('oFall')?1:0,smooth:opt('oSmooth')?1:0,soft:opt('oSoft')?1:0}};}
+  function reflexCfg(){return {noReflex:!opt('oReflex'),flags:{nn:opt('oNN')?1:0,getup:opt('oNN')&&opt('oGetup')?1:0,bal2:opt('oBal2')?1:0,step:opt('oStep')?1:0,air:opt('oFall')?1:0,land:opt('oFall')?1:0,fall:opt('oFall')?1:0,smooth:opt('oSmooth')?1:0,soft:opt('oSoft')?1:0}};}
   function reflexText(){return (opt('oReflex')?('balance'+(opt('oBal2')?' v2 + steps':(opt('oStep')?', step':''))+(opt('oFall')?', fall/landing':'')):'none')+(opt('oSmooth')?' · smooth reward':'')+(opt('oSoft')?' · soft start':'');}
   var training=false;
   function esGeneration(){
@@ -1046,9 +1119,9 @@ var RS=(function(){
     if(opt('oNN')&&RS.hasDet()){ // what the network thinks is happening, above each head
       ctx.font='600 12px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
       rigs.forEach(function(r){
-        var p=r.dp,b=0;for(var j=1;j<p.length;j++)if(p[j]>p[b])b=j;
+        var p=r.dp,b=0;for(var j=1;j<p.length;j++)if(p[j]>p[b])b=j;var gu=r.gu&&r.gu.ph>=0;
         var hp=toScreen(r.parts[0].getPosition());
-        ctx.globalAlpha=0.5+0.5*p[b];ctx.fillText(RS.DCLS[b]+' '+Math.round(p[b]*100)+'%',hp.x,hp.y-0.2*cam.z);ctx.globalAlpha=1;
+        ctx.globalAlpha=gu?1:0.5+0.5*p[b];ctx.fillText(gu?'getting up':RS.DCLS[b]+' '+Math.round(p[b]*100)+'%',hp.x,hp.y-0.2*cam.z);ctx.globalAlpha=1;
       });
     }
     if(opt('oSkel')){
@@ -1095,7 +1168,7 @@ var RS=(function(){
       acc+=dt;
       var use=opt('oUse'),pd=opt('oPD'),reflex=opt('oReflex'),i;
       RS.FLAGS.air=RS.FLAGS.land=RS.FLAGS.fall=opt('oFall')?1:0;
-      RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;
+      RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;
       while(acc>=DT){
         if((use||reflex)&&stepCount%SUB===0)for(i=0;i<rigs.length;i++)RS.act(rigs[i],use?ES.theta:ZERO_TH,liveBufs[i],liveRng,{delay:1,noise:0.005,reflex:reflex}); // reflexes run even when the policy is off (untrained = zero weights)
         if(pd)for(i=0;i<rigs.length;i++)RS.pdRig(rigs[i]);

@@ -38,7 +38,8 @@ details button{font-size:14px;padding:8px 12px}
   <canvas id="chart" width="440" height="140"></canvas>
   <label>Pairs <input type="number" id="nPairs" value="16" min="2" max="64"> Scenarios <input type="number" id="nScen" value="3" min="1" max="8"></label>
   <label>Workers <input type="number" id="nWork" value="-1" min="-1" max="16"> <span style="opacity:.6">-1 = auto, 0 = none</span></label>
-  <label><input type="checkbox" id="oNN" checked> Neural reactions (shows what it senses)<label>
+  <label><input type="checkbox" id="oNN" checked> Neural reactions (shows what it senses)</label>
+  <label><input type="checkbox" id="oGetup" checked> Get up when down (needs Neural reactions)</label>
   <label><input type="checkbox" id="oUse"> Use old ES policy (watch it)</label>
   <label><input type="checkbox" id="oReflex" checked> Balance reflex</label>
   <label><input type="checkbox" id="oBal2" checked> New balance + recovery steps</label>
