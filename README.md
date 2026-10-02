@@ -14,4 +14,6 @@ It is inspired by Euphoria, the procedural character-physics technology used in 
 ## Status
 Experimental. It stands, recovers from moderate pushes and sits up from lying down. The network does not yet clearly beat the reflexes alone, it falls over under hard pushes, and getting fully back to standing is unsolved. See `HANDOFF.md` for measurements and the to-do list.
 
+Training rewards smooth, human-like motion (no twitching, calm stillness) and the ragdoll eases into standing after spawning. Both are switchable: tick boxes on the page, `smooth`/`soft` inputs on the GitHub Actions workflow.
+
 ## Run it

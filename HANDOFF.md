@@ -54,7 +54,7 @@ Constants in `sim.js`: `DT=1/240` (240 Hz substeps), `LIMF=0.35`, `TMAX=1`, `INE
 
 ## 5. Policy and reflexes
 
-**Network** (`NI=49, NH=40, NO=18, NP=4378`, tanh, plain JS arrays; weights file format below). Output layer initialised to **zero**, so an untrained net = standing pose + reflexes.
+**Network** (`NI=64, NH=40, NO=33, NP=5593` since the smooth-motion change; was `49/40/18/4378`, tanh, plain JS arrays; weights file format below). Inputs 49-63 are its own current PD targets; outputs 15-29 are per-joint stiffness (was 3 groups), 30/31 ankle/hip balance-reflex gain (0..2x), 32 target smoothing rate. All neutral at zero. Output layer initialised to **zero**, so an untrained net = standing pose + reflexes.
 - Observation: 0-29 joint angle and speed*0.1 (interleaved); 30-35 sin/cos of pelvis, chest, head; 36-37 pelvis/chest angular velocity*0.1; 38 (COM x − support centre)/0.2; 39 COM vx/0.5; 40 capture-point offset/0.2; 41 (COM y − 0.95)*2; 42 support contact; 43-44 foot contact; 45-46 hand-on-ground; 47 pelvis-on-ground; 48 head-on-ground.
 - Output: 15 PD target offsets (tanh × `ASC` per joint: neck .4, spines .5/.4, shoulder 1.2, elbow 1.2, wrist .5, hip 1.2, knee 1.5, ankle .6) + 3 stiffness values.
 - Domain randomisation per episode: mass ±15%, per-part ±10%, friction 0.7-1.2, gain 0.9-1.1, action delay 0-3 policy steps, observation noise ≤0.01.
@@ -72,7 +72,9 @@ Constants in `sim.js`: `DT=1/240` (240 Hz substeps), `LIMF=0.35`, `TMAX=1`, `INE
 - **Reward per step (scaled to 60/POLICY_HZ):** `0.6*stand + prog − calm*penalties`. `stand = 0.3*up + 0.25*pose + 0.25*legs + 0.2*head-height`; `prog = 0.25*hn^2 + 0.15*cos(chest)` (dense shaping for getting up); penalties: leg split, action change, joint speed, COM velocity/drift, torque effort, all scaled by `calm` (reduced for 1.2 s after a disturbance). **While a reflex is active (`reactive`) posture/leg/jerk penalties are switched off**, otherwise the reward punishes the reflexes.
 - **The reward is blind to "human-like"**: stepping/bracing earn nothing extra. Planned fix (not built): pay for foot landing under the capture point when falling, arms reaching toward the fall, and recovery.
 - **ES** (`esNoise`, `esStep` in `sim.js`): antithetic sampling, centred ranks, Adam. Defaults `sigma=0.01, lr=0.004, pairs=16, scenarios=3`, curriculum `pushMax = min(1.5, 0.7 + 0.02*gen)`. All candidates in a generation see the same scenarios (common random numbers). `sigma=0.1` diverges; `0.05`/`0.01` stable but not improving much.
-- Weights file (page "Save/Load file" and `train.js` output): `{"format":"ragdoll-policy","version":2,"np":4378,"gen":N,"theta":[...],"hist":[]}`. **Any change to NI/NH/NO breaks old files.**
+- Weights file (page "Save/Load file" and `train.js` output): `{"format":"ragdoll-policy","version":2,"np":4378,"gen":N,"theta":[...],"hist":[]}`. Version 3 = current layout. `RS.migrate` converts version-2 (4378-weight) files exactly, and the page's Load file and `train.js` resume use it. Any other change to NI/NH/NO needs a new migration.
+
+- **Smooth/human reward (`FLAGS.smooth`, on by default in `train.js` and the page):** penalises command jerk (2nd difference of outputs) and joint acceleration (capped at 0.05 rad/s per step so impacts don't dominate). The penalty is 4x right after an upright start and 0.3x while a reflex is active. It pays for calm stillness, a level head and relaxed joints once nothing is happening. **`FLAGS.soft`** eases PD targets in over `softT`=0.6 s after an upright spawn. Measure twitch with `tools/t120.js`.
 
 ## 7. Measurements so far (so you don't repeat them)
 

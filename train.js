@@ -9,7 +9,8 @@ const os=require('os'),fs=require('fs');
 
 var RS=(function(){
   'use strict';
-  var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+  var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+  // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
   // =====================================================================
@@ -117,15 +118,17 @@ var RS=(function(){
       return {j:joints[k],a:bodies[IDX[T[jt.child].p]],b:bodies[IDX[jt.child]],g:jt.g,kp:GAIN[k].kp*gs,kd:GAIN[k].kd*gs,max:GAIN[k].max*gs,target:0,t:0};
     });
     var feet=[bodies[IDX.ftf],bodies[IDX.ftn]];
-    return {parts:bodies,feet:feet,ctrls:ctrls,stiff:[1,1,1],tgt:new Float64Array(NJ),
-      lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:[1,1,1],fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
+    var soft=FLAGS.soft&&Math.abs(ra)<0.3&&(o.h||0)<0.05,tgt0=new Float64Array(NJ); // soft start (only when spawned upright on the feet): PD targets begin at the spawn pose
+    if(soft)for(i=0;i<NJ;i++)tgt0[i]=pose[i];
+    return {parts:bodies,feet:feet,ctrls:ctrls,stiff:new Float64Array(NJ).fill(1),tgt:tgt0,age:soft?0:1e9,prevO:new Float64Array(NO),prevO2:new Float64Array(NO),prevW:new Float64Array(NJ),
+      lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:new Float64Array(NJ).fill(1),fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
   }
 
-  // PD: torque = kp*(target-angle) - kd*angularVelocity, clamped. Stiffness groups scale kp, kd, and the torque cap.
+  // PD: torque = kp*(target-angle) - kd*angularVelocity, clamped. Per-joint stiffness scales kp, kd, and the torque cap.
   function pdRig(r){
     var cs=r.ctrls,st=r.stiff;
     for(var i=0;i<cs.length;i++){
-      var c=cs[i],ks=st[c.g];
+      var c=cs[i],ks=st[i];
       var t=c.kp*ks*(c.target-c.j.getJointAngle())-c.kd*Math.sqrt(ks)*c.j.getJointSpeed();
       var mx=c.max*ks;
       if(t>mx)t=mx;else if(t<-mx)t=-mx;
@@ -135,10 +138,13 @@ var RS=(function(){
   }
 
   // =====================================================================
-  // POLICY: MLP  NI -> NH -> NH -> NO.   NO = 15 PD target offsets + 3 stiffness groups
+  // POLICY: MLP  NI -> NH -> NH -> NO.
+  //  in:  0-48 body state (see sense), 49-63 its own current PD targets (so it can move smoothly from where it is)
+  //  out: 0-14 PD target offsets, 15-29 per-joint stiffness, 30/31 ankle/hip balance-reflex gain (0..2x), 32 target smoothing rate
+  //  All extra outputs are neutral at 0, so a zero output layer still means 'standing pose + reflexes'.
   // =====================================================================
   var ASC=[0.4,0.5,0.4, 1.2,1.2,0.5,1.2,1.5,0.6, 1.2,1.2,0.5,1.2,1.5,0.6]; // max PD-target offset per joint (rad)
-  var NI=49,NH=40,NO=18;
+  var NI=64,NH=40,NO=33,O_STIFF=15,O_RFA=30,O_RFH=31,O_FILT=32;
   var B1=NH*NI,W2=B1+NH,B2=W2+NH*NH,W3=B2+NH,B3=W3+NO*NH,NP=B3+NO;
   function newBuf(){return {h1:new Float64Array(NH),h2:new Float64Array(NH),obs:new Float64Array(NI),out:new Float64Array(NO)};}
   function forward(p,x,out,b){
@@ -154,6 +160,21 @@ var RS=(function(){
     for(i=0;i<B1;i++)p[i]=gauss(r)*Math.sqrt(1/NI);
     for(i=W2;i<B2;i++)p[i]=gauss(r)*Math.sqrt(1/NH);
     for(i=W3;i<B3;i++)p[i]=0; // zero outputs: training starts exactly at 'standing pose + reflex' and improves from there
+    return p;
+  }
+  // old weight files (version 2: 49 inputs, 18 outputs, 3 stiffness groups) -> current layout, behaving exactly the same.
+  // Returns a Float64Array of NP weights, or null if the size is not recognised.
+  var OLD={NI:49,NO:18};OLD.NP=NH*OLD.NI+NH+NH*NH+NH+OLD.NO*NH+OLD.NO;
+  function migrate(th){
+    if(!th)return null;
+    if(th.length===NP)return Float64Array.from(th);
+    if(th.length!==OLD.NP)return null;
+    var p=new Float64Array(NP),j,i,k,o1=NH*OLD.NI,o2=o1+NH,o3=o2+NH*NH+NH,ob=o3+OLD.NO*NH;
+    for(j=0;j<NH;j++)for(i=0;i<OLD.NI;i++)p[j*NI+i]=th[j*OLD.NI+i];  // new inputs get zero weight
+    for(j=0;j<NH;j++)p[B1+j]=th[o1+j];
+    for(i=0;i<NH*NH+NH;i++)p[W2+i]=th[o2+i];
+    function row(dst,src){for(i=0;i<NH;i++)p[W3+dst*NH+i]=th[o3+src*NH+i];p[B3+dst]=th[ob+src];}
+    for(k=0;k<NJ;k++){row(k,k);row(O_STIFF+k,15+JT[k].g);} // each joint copies its old group's stiffness output
     return p;
   }
   function wrap(a){return a-6.283185307179586*Math.round(a/6.283185307179586);}
@@ -201,6 +222,7 @@ var RS=(function(){
     o[43]=rig.fc[0]?1:0;o[44]=rig.fc[1]?1:0;
     o[45]=lowY(ps[HAND_IDX[0]])<0.04?1:0;o[46]=lowY(ps[HAND_IDX[1]])<0.04?1:0;
     o[47]=lowY(pel)<0.06?1:0;o[48]=lowY(hd)<0.06?1:0;
+    for(k=0;k<NJ;k++)o[49+k]=rig.tgt[k]/ASC[k];
     rig.com={x:mx,y:my,vx:vx,vy:vy,contact:contact};
     rig.xi=mx+vx/W0;
     rig.e=rig.xi-(rig.lo+0.45*(rig.hi-rig.lo));
@@ -268,8 +290,8 @@ var RS=(function(){
     var rf=opt.reflex!==false;
     if(rf&&upright&&rig.com.contact){
       var e=rig.e,ae=Math.abs(e)-0.02;
-      tA=clampA(-4*e,0.5);
-      if(ae>0)tH=clampA((e>0?-1:1)*4*ae,0.7);
+      tA=clampA(-4*e,0.5)*(1+out[O_RFA]);
+      if(ae>0)tH=clampA((e>0?-1:1)*4*ae,0.7)*(1+out[O_RFH]);
     }
     // ---- reflexes for things that go wrong: landing, losing balance, falling ----
     var sL=1,sS=1,sA=1,addK=0,addH=0,neck=0,sh=0,el=0,fall=false;
@@ -291,22 +313,26 @@ var RS=(function(){
       }
     }
     rig.fallT=fall?rig.fallT+dt:0;
-    var gl=[sL,sS,sA],g;
-    for(g=0;g<3;g++){
-      var base=0.2+0.8*sig(2*out[15+g]+2),want=Math.min(base,gl[g]);
-      rig.rs[g]+=(want-rig.rs[g])*(want<rig.rs[g]?0.5:0.12); // soften fast, stiffen back quickly
-      rig.stiff[g]=rig.rs[g];
+    var gl=[sL,sS,sA],k;
+    for(k=0;k<NJ;k++){ // per-joint stiffness from the network, capped by what the active reflexes allow for that joint's group
+      var base=0.2+0.8*sig(2*out[O_STIFF+k]+2),want=Math.min(base,gl[JT[k].g]);
+      rig.rs[k]+=(want-rig.rs[k])*(want<rig.rs[k]?0.5:0.12); // soften fast, stiffen back quickly
+      rig.stiff[k]=rig.rs[k];
     }
     var tt=new Array(NJ);
-    for(var k=0;k<NJ;k++){
+    for(k=0;k<NJ;k++){
       var t=out[k]*ASC[k];
       if(k===8||k===14)t+=tA;else if(k===6||k===12)t+=tH+addH;else if(k===7||k===13)t+=addK;
       else if(k===0)t+=neck;else if(k===3||k===9)t+=sh;else if(k===4||k===10)t+=el;
       tt[k]=t;
     }
     if(rf&&FLAGS.step)stepReflex(rig,tt,ca,dt);
+    // target smoothing: the network can slow it down (smoother) or speed it up; soft start eases in after spawning
+    var al=clampA(FILT*(1+0.6*out[O_FILT]),1);
+    if(rig.age<FLAGS.softT){var x=rig.age/FLAGS.softT;al*=0.04+0.96*x*x*(3-2*x);}
+    rig.age+=dt;
     for(k=0;k<NJ;k++){
-      rig.tgt[k]+=(tt[k]-rig.tgt[k])*FILT;
+      rig.tgt[k]+=(tt[k]-rig.tgt[k])*al;
       rig.ctrls[k].target=rig.tgt[k];
     }
     return out;
@@ -389,7 +415,22 @@ var RS=(function(){
       var stand=0.3*up+0.25*pose+0.25*legs+0.2*hh,prog=0.25*hn*hn+0.15*Math.max(0,Math.cos(ca));
       var calm=Math.min(1,Math.max(0.15,(t-lastDist)/1.2));
       var pen=calm*(2.0*split+2.0*da/NJ+1.0*jv/NJ+0.5*Math.abs(rig.com.vx)+1.0*Math.max(0,Math.abs(rig.com.x)-0.05)+0.1*eff/NJ);
-      var rew=scale*(0.6*stand+prog-pen);
+      var hum=0;
+      if(FLAGS.smooth){
+        // smooth & human-like: penalise jerky commands and joint accelerations (twitching), hardest just after an upright start;
+        // once nothing is happening, pay for calm stillness, a level head and relaxed (not co-contracted) joints
+        var jk=0,acc=0,rx=0;
+        for(k=0;k<NO;k++){jk+=Math.abs(out[k]-2*rig.prevO[k]+rig.prevO2[k]);rig.prevO2[k]=rig.prevO[k];rig.prevO[k]=out[k];}
+        for(k=0;k<NJ;k++){var wv=cs[k].j.getJointSpeed();acc+=Math.abs(wv-rig.prevW[k]);rig.prevW[k]=wv;rx+=rig.stiff[k];}
+        if(i<2){jk=0;acc=0;} // no history yet
+        var startW=(sc.type==='stand'||sc.type==='push')?1+3*Math.exp(-t/0.8):1;
+        hum=-startW*(reactive?0.3:1)*(1.5*jk/NO+3.0*Math.min(acc/NJ,0.05)); // capped: hard impacts are physics, not twitching
+        if(upright&&!reactive){
+          var ha=wrap(head.getAngle());
+          hum+=calm*(0.15*Math.exp(-jv/NJ/0.05)*Math.exp(-Math.abs(rig.com.vx)/0.05)+0.05*Math.exp(-10*ha*ha)+0.1*(1-rx/NJ));
+        }
+      }
+      var rew=scale*(0.6*stand+prog-pen+hum);
       total+=rew;rateAvg=rateAvg*0.98+rew*0.02;
       // early stop: standing still and no disturbance left -> assume it stays that way; lying motionless -> give up
       var lastPushT=sc.pushes.length?sc.pushes[sc.pushes.length-1].t:0;
@@ -428,7 +469,7 @@ var RS=(function(){
   }
 
   return {FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
-    esNoise:esNoise,esStep:esStep,runEpisode:runEpisode,evalCandidate:evalCandidate,sampleScenario:sampleScenario,fk:fk,
+    esNoise:esNoise,esStep:esStep,migrate:migrate,runEpisode:runEpisode,evalCandidate:evalCandidate,sampleScenario:sampleScenario,fk:fk,
     NP:NP,NI:NI,NO:NO,NJ:NJ,DT:DT,SUB:SUB,POLICY_HZ:POLICY_HZ,VEL_IT:VEL_IT,POS_IT:POS_IT,JT:JT,ORDER:ORDER,CASES:CASES,wrap:wrap};
 })();
 
@@ -448,7 +489,8 @@ async function main(){
   const SIGMA=num('SIGMA',0.01),LR=num('LR',0.004),EVAL_EVERY=Math.round(num('EVAL_EVERY',20)),NP=RS.NP;
   const MODE=env.MODE||'full';                      // full = train every weight, out = output layer only
   const NW=Math.max(1,Math.round(num('WORKERS',os.cpus().length)));
-  const FLAGS={step:1,air:1,land:1,fall:1};         // all reflexes on, like the page default
+  const FLAGS={step:1,air:1,land:1,fall:1,           // all reflexes on, like the page default
+    smooth:env.SMOOTH==='false'?0:1,soft:env.SOFT==='false'?0:1}; // smooth/human-like reward and soft start (on unless set to false)
   const outDir=env.OUT||'out';fs.mkdirSync(outDir,{recursive:true});
   const logFile=outDir+'/log.txt';
   function log(s){const line=new Date().toISOString().slice(11,19)+'  '+s;console.log(line);fs.appendFileSync(logFile,line+'\n');}
@@ -462,11 +504,12 @@ async function main(){
   let gen0=0;
   if(env.RESUME==='true'&&fs.existsSync('resume.json')){
     const d=JSON.parse(fs.readFileSync('resume.json','utf8'));
-    if(d.theta&&d.theta.length===NP){S.theta=Float64Array.from(d.theta);gen0=d.gen||0;log('resumed from resume.json at generation '+gen0);}
+    const th=RS.migrate(d.theta);
+    if(th){S.theta=th;gen0=d.gen||0;log('resumed from resume.json at generation '+gen0+(d.theta.length!==NP?' (converted from the old network layout)':''));}
     else log('resume.json has the wrong size, starting fresh');
   }
   if(num('MINUTES',330)>340)log('MINUTES capped at 340: GitHub stops a job at 6 hours, so longer runs would lose their results');
-  log('cpus='+os.cpus().length+' workers='+NW+' pairs='+P+' scenarios='+K+' sigma='+SIGMA+' lr='+LR+' mode='+MODE+' minutes='+MINUTES);
+  log('cpus='+os.cpus().length+' workers='+NW+' pairs='+P+' scenarios='+K+' sigma='+SIGMA+' lr='+LR+' mode='+MODE+' smooth='+FLAGS.smooth+' soft='+FLAGS.soft+' minutes='+MINUTES);
 
   const pool=[];for(let i=0;i<NW;i++)pool.push(new Worker(__filename));
   function runJobs(jobs){
@@ -483,7 +526,7 @@ async function main(){
     });
   }
   function save(file,gen){
-    fs.writeFileSync(outDir+'/'+file,JSON.stringify({format:'ragdoll-policy',version:2,np:NP,gen:gen,theta:Array.prototype.slice.call(S.theta),hist:[]}));
+    fs.writeFileSync(outDir+'/'+file,JSON.stringify({format:'ragdoll-policy',version:3,np:NP,gen:gen,theta:Array.prototype.slice.call(S.theta),hist:[]}));
   }
   const zero=new Float64Array(NP),N=8;
   async function heldout(theta){
