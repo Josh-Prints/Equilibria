@@ -137,7 +137,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bClean">Clean up blood</button>
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
-  <div class="ver">beta v0.1.8</div>
+  <div class="ver">beta v0.1.9</div>
 </div>
 
 <div id="splash">
@@ -145,7 +145,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <div><span class="tag">BETA</span></div>
   <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
   <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
-  <div class="ver">beta v0.1.8</div>
+  <div class="ver">beta v0.1.9</div>
   <button id="bPlay">Play</button>
   <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sGore" class="tg sm">Blood &amp; gore: on</button></div>
 </div>
@@ -156,7 +156,7 @@ var RS_DETW={"mu":[-0.0067241,-0.00027025,0.0024076,0.00022175,0.0021074,-0.0000
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:13,ripImp:22,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:13,crushLimb:11.5,ripImp:19,strands:1,groggyT:5,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -771,7 +771,12 @@ var RS=(function(){
   }
   function sever(rig,k){
     var I=injOf(rig);if(I.gone[k]||k<3)return; // limbs only
-    var j=rig.ctrls[k].j;j.getBodyA().getWorld().destroyJoint(j._r||j);
+    var j=rig.ctrls[k].j,rj=j._r||j,w=rj.getBodyA().getWorld(),A=rj.getBodyA(),B=rj.getBodyB(),la=rj.getLocalAnchorA(),lb=rj.getLocalAnchorB();
+    w.destroyJoint(rj);
+    if(FLAGS.strands){ // still hanging on by strands of muscle, tendon and gut: they stretch under a pull and snap
+      var L0=0.16,rp=w.createJoint(planck.RopeJoint({maxLength:L0,localAnchorA:Vec2(la.x,la.y),localAnchorB:Vec2(lb.x,lb.y)},A,B));
+      (rig.strands||(rig.strands=[])).push({j:rp,k:k,A:A,B:B,la:Vec2(la.x,la.y),lb:Vec2(lb.x,lb.y),L:L0,max:0.35+0.25*Math.random(),n:2+(Math.random()*3|0),seed:Math.random()*6.28});
+    }
     KIDS[k].forEach(function(q){I.gone[q]=1;I.broken[q]=0;});
     ev(rig,'sever',k);
   }
@@ -799,7 +804,7 @@ var RS=(function(){
     var I=injOf(rig),ps=rig.parts,k;
     if(FLAGS.crush&&I.t>0.2&&rig.impB){
       for(k=0;k<ps.length;k++){
-        var d=rig.impB[k];if(!(d>FLAGS.crushImp))continue;
+        var d=rig.impB[k];if(!(d>(k===0?FLAGS.crushImp:FLAGS.crushLimb)))continue;
         if(k===0){if(!rig.dead){rig.dead=true;ev(rig,'crush',0,d);}continue;}
         if(k<4)continue;
         var j=k-1;if(I.gone[j])continue;
@@ -817,8 +822,17 @@ var RS=(function(){
       else if(rig.blood<0.45&&!rig.dead){rig.koT=Math.max(rig.koT||0,0.5);rig.koWhy='blood';}
     }
   }
+  function strandStep(rig,dt){ // strands stretch while pulled hard (and slowly sag under a dangling limb's weight), then snap
+    var S=rig.strands;if(!S)return;
+    for(var i=S.length-1;i>=0;i--){
+      var s=S[i],f=0;try{var F=s.j.getReactionForce(1/DT);f=Math.hypot(F.x,F.y)||0;}catch(e){} // (planck throws before its first step)
+      s.f=f;if(f>25)s.L+=Math.min(0.6,(f-25)/250)*dt;
+      if(s.L>=s.max){s.j.getBodyA().getWorld().destroyJoint(s.j);S.splice(i,1);ev(rig,'snap',s.k);}
+      else s.j.setMaxLength(s.L);
+    }
+  }
   function injuries(rig,dt){
-    var I=injOf(rig),k;I.t+=dt;
+    var I=injOf(rig),k;I.t+=dt;strandStep(rig,dt);
     for(k=0;k<NJ;k++){
       if(I.gone[k])continue;
       var c=rig.ctrls[k],j=c.j,F=j.getReactionForce(1/DT),an=j.getAnchorB(),cb=c.b.getWorldCenter(),dx=cb.x-an.x,dy=cb.y-an.y,dl=Math.hypot(dx,dy)||1;
@@ -911,10 +925,12 @@ var RS=(function(){
     if(rf&&(FLAGS.crush||FLAGS.bleed))crushBleed(rig,dt);
     if(rf&&FLAGS.die&&rig.impD>FLAGS.dieImp)rig.dead=true;
     if(rig.dead)return goLimp(rig,out);
-    if(rig.koT>0){rig.koT-=dt;if(rig.koT<=0){rig.age=0;rig.wakeT=4;}goLimp(rig,out);rig.ko=true;return out;} // knocked out: limp until it comes round
+    if(rig.koT>0){rig.koT-=dt;if(rig.koT<=0){rig.age=0;rig.wakeT=4;rig.groggy=FLAGS.groggyT;}goLimp(rig,out);rig.ko=true;return out;} // knocked out: limp until it comes round
     rig.ko=false;
+    // coming round after being out: muscles come back slowly (weak and floppy at first), no getting up until halfway
+    var gw=1;if(rig.groggy>0){rig.groggy-=dt;var gx=Math.max(0,1-rig.groggy/FLAGS.groggyT);gw=0.03+0.97*gx*gx;}
     var cowering=rf&&(FLAGS.cower||hurt(rig))&&cower(rig,tt,dt);rig.cowering=!!cowering;
-    var gettingUp=!cowering&&rf&&FLAGS.getup&&getUp(rig,tt,dt);
+    var gettingUp=!cowering&&rf&&FLAGS.getup&&gw>0.3&&getUp(rig,tt,dt);
     guLimits(rig,!!gettingUp);
     rig.b2ok=!cowering&&!gettingUp&&rf&&FLAGS.bal2?bal2(rig,tt,out,ca,dt):false;
     if(!cowering&&!gettingUp&&rf&&!FLAGS.bal2&&FLAGS.step)stepReflex(rig,tt,ca,dt);
@@ -928,6 +944,7 @@ var RS=(function(){
       rig.tgt[k]+=(tt[k]-rig.tgt[k])*al;
       rig.ctrls[k].target=rig.tgt[k];
     }
+    if(gw<1)for(k=0;k<NJ;k++){rig.rs[k]=Math.min(rig.rs[k],gw);rig.stiff[k]=rig.rs[k];}
     injLimp(rig);
     return out;
   }
@@ -1466,7 +1483,7 @@ var RS=(function(){
     rigs.slice(-6).forEach(function(r,i){
       var bl=r.blood==null?1:r.blood,I=r.inj,nb=0,ng=0;
       if(I)for(var k=0;k<RS.NJ;k++){if(I.broken[k])nb++;if(I.gone[k]&&(k%3===0||!I.gone[k-1]))ng++;}
-      var st=r.dead?'Dead':r.koT>0?(r.koWhy==='pain'?'Passed out':'Knocked out'):r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
+      var st=r.dead?'Dead':r.koT>0?(r.koWhy==='pain'?'Passed out':'Knocked out'):r.groggy>0?'Waking up':r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
       html+='<div class="hc" data-n="'+r.num+'">'+(r.name?esc(r.name):'#'+r.num)+' '+st+(nb?' · '+nb+' broken':'')+(ng?' · '+ng+' lost':'')+'<div class="hb"><i style="width:'+Math.round(bl*100)+'%"></i></div></div>';
     });
     if(h.innerHTML!==html)h.innerHTML=html;
@@ -1581,6 +1598,9 @@ var RS=(function(){
           b=e.k===0?r.bodies[0]:r.rc[e.k].b;p=b.getWorldCenter();
           if(gore){gush(p.x,p.y,0,1,140,2.4+0.12*e.d,1);gush(p.x,p.y,0,1.5,24,2.8,1,true);r.bl[r.bodies.indexOf(b)]=1;}
           if(e.k===0)r.headCrushed=true;
+        }else if(e.t==='snap'){
+          sfx('squelch');
+          if(gore){p=anchorA(r.rc[e.k]);gush(p.x,p.y,0,0.5,30,1.6,1);}
         }else if(e.t==='sever'){
           c=r.rc[e.k];sfx('squelch');sfx('crunch',true);
           if(gore){p=anchorA(c);gush(p.x,p.y,0,1,120,2.8,1);gush(p.x,p.y,0,1,14,2.2,1,true);r.bl[r.bodies.indexOf(c.a)]=Math.min(1,r.bl[r.bodies.indexOf(c.a)]+0.7);r.bl[r.bodies.indexOf(c.b)]=1;}
@@ -1688,6 +1708,23 @@ var RS=(function(){
       });
     });
   }
+  function drawStrands(){ // red strings of muscle and gut still joining a torn-off limb to the stump
+    rigs.forEach(function(r){
+      (r.strands||[]).forEach(function(s){
+        var a=toScreen(s.A.getWorldPoint(s.la)),b=toScreen(s.B.getWorldPoint(s.lb)),dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1;
+        var slack=Math.max(0,s.L*cam.z-d),taut=Math.min(1,d/(s.L*cam.z+1e-6));
+        for(var i=0;i<s.n;i++){
+          var o=(i-(s.n-1)/2)*0.018*cam.z*(1-0.7*taut),sg=slack*0.5+0.01*cam.z*Math.sin(s.seed+i*2.1);
+          var mx=(a.x+b.x)/2-dy/d*o,my=(a.y+b.y)/2+dx/d*o+sg;
+          var w=Math.max(1.5,(0.022-0.005*i)*cam.z*(1-0.5*taut));
+          ctx.beginPath();ctx.moveTo(a.x-dy/d*o*0.4,a.y+dx/d*o*0.4);ctx.quadraticCurveTo(mx,my,b.x-dy/d*o*0.4,b.y+dx/d*o*0.4);
+          ctx.strokeStyle='#3a0204';ctx.lineWidth=w+2;ctx.lineCap='round';ctx.stroke();
+          ctx.strokeStyle=i%2?'#b8323a':'#8e0f14';ctx.lineWidth=w;ctx.stroke();
+        }
+      });
+    });
+    ctx.lineCap='butt';
+  }
   function drawBlood(){
     ctx.fillStyle='#8a0a0a';ctx.beginPath();
     for(var i=0;i<parts.length;i++){var q=parts[i];if(q.g||q.t)continue;var s=toScreen(q);var rr=Math.max(1.2,q.r*cam.z);ctx.rect(s.x-rr/2,s.y-rr/2,rr,rr);}
@@ -1710,6 +1747,7 @@ var RS=(function(){
     ctx.stroke();ctx.restore();
     drawGround(gy);
     drawFlesh(true);if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;}drawFlesh(false);if(opt('oBox'))drawBodies(false);
+    drawStrands();
     drawBlood();
     { // name above the head (only once you've named them)
       ctx.font='600 13px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;

@@ -394,7 +394,7 @@
     rigs.slice(-6).forEach(function(r,i){
       var bl=r.blood==null?1:r.blood,I=r.inj,nb=0,ng=0;
       if(I)for(var k=0;k<RS.NJ;k++){if(I.broken[k])nb++;if(I.gone[k]&&(k%3===0||!I.gone[k-1]))ng++;}
-      var st=r.dead?'Dead':r.koT>0?(r.koWhy==='pain'?'Passed out':'Knocked out'):r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
+      var st=r.dead?'Dead':r.koT>0?(r.koWhy==='pain'?'Passed out':'Knocked out'):r.groggy>0?'Waking up':r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
       html+='<div class="hc" data-n="'+r.num+'">'+(r.name?esc(r.name):'#'+r.num)+' '+st+(nb?' · '+nb+' broken':'')+(ng?' · '+ng+' lost':'')+'<div class="hb"><i style="width:'+Math.round(bl*100)+'%"></i></div></div>';
     });
     if(h.innerHTML!==html)h.innerHTML=html;
@@ -509,6 +509,9 @@
           b=e.k===0?r.bodies[0]:r.rc[e.k].b;p=b.getWorldCenter();
           if(gore){gush(p.x,p.y,0,1,140,2.4+0.12*e.d,1);gush(p.x,p.y,0,1.5,24,2.8,1,true);r.bl[r.bodies.indexOf(b)]=1;}
           if(e.k===0)r.headCrushed=true;
+        }else if(e.t==='snap'){
+          sfx('squelch');
+          if(gore){p=anchorA(r.rc[e.k]);gush(p.x,p.y,0,0.5,30,1.6,1);}
         }else if(e.t==='sever'){
           c=r.rc[e.k];sfx('squelch');sfx('crunch',true);
           if(gore){p=anchorA(c);gush(p.x,p.y,0,1,120,2.8,1);gush(p.x,p.y,0,1,14,2.2,1,true);r.bl[r.bodies.indexOf(c.a)]=Math.min(1,r.bl[r.bodies.indexOf(c.a)]+0.7);r.bl[r.bodies.indexOf(c.b)]=1;}
@@ -616,6 +619,23 @@
       });
     });
   }
+  function drawStrands(){ // red strings of muscle and gut still joining a torn-off limb to the stump
+    rigs.forEach(function(r){
+      (r.strands||[]).forEach(function(s){
+        var a=toScreen(s.A.getWorldPoint(s.la)),b=toScreen(s.B.getWorldPoint(s.lb)),dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1;
+        var slack=Math.max(0,s.L*cam.z-d),taut=Math.min(1,d/(s.L*cam.z+1e-6));
+        for(var i=0;i<s.n;i++){
+          var o=(i-(s.n-1)/2)*0.018*cam.z*(1-0.7*taut),sg=slack*0.5+0.01*cam.z*Math.sin(s.seed+i*2.1);
+          var mx=(a.x+b.x)/2-dy/d*o,my=(a.y+b.y)/2+dx/d*o+sg;
+          var w=Math.max(1.5,(0.022-0.005*i)*cam.z*(1-0.5*taut));
+          ctx.beginPath();ctx.moveTo(a.x-dy/d*o*0.4,a.y+dx/d*o*0.4);ctx.quadraticCurveTo(mx,my,b.x-dy/d*o*0.4,b.y+dx/d*o*0.4);
+          ctx.strokeStyle='#3a0204';ctx.lineWidth=w+2;ctx.lineCap='round';ctx.stroke();
+          ctx.strokeStyle=i%2?'#b8323a':'#8e0f14';ctx.lineWidth=w;ctx.stroke();
+        }
+      });
+    });
+    ctx.lineCap='butt';
+  }
   function drawBlood(){
     ctx.fillStyle='#8a0a0a';ctx.beginPath();
     for(var i=0;i<parts.length;i++){var q=parts[i];if(q.g||q.t)continue;var s=toScreen(q);var rr=Math.max(1.2,q.r*cam.z);ctx.rect(s.x-rr/2,s.y-rr/2,rr,rr);}
@@ -638,6 +658,7 @@
     ctx.stroke();ctx.restore();
     drawGround(gy);
     drawFlesh(true);if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;}drawFlesh(false);if(opt('oBox'))drawBodies(false);
+    drawStrands();
     drawBlood();
     { // name above the head (only once you've named them)
       ctx.font='600 13px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
