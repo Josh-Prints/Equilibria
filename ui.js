@@ -490,7 +490,7 @@
   // blood soaked into the skin: splats stored in each body's own frame, so they move with it
   function addDecalL(r,k,lx,ly,s){
     var D=r.dec||(r.dec=[]),a=D[k]||(D[k]=[]);
-    if(a.length>=60){var o=a[Math.random()*a.length|0];o.s=Math.min(0.05,o.s+s*0.25);return;}
+    if(a.length>=24){var o=a[Math.random()*a.length|0];o.s=Math.min(0.05,o.s+s*0.25);return;}
     a.push({x:lx,y:ly,s:s,a:Math.random()*6.28});
   }
   function addDecal(r,k,w,s){var lp=partOf(r,k).getLocalPoint(w);addDecalL(r,k,lp.x,lp.y,s);}
@@ -580,7 +580,8 @@
         var wp=b.getWorldPoint(Vec2(q.lx,q.ly));q.x=wp.x;q.y=wp.y;q.life-=q.t?dt:dt*0.4;
         if(!q.t){q.tr=(q.tr||0)+spd*dt;if(q.tr>0.018){q.tr=0;addDecalL(q.rig,q.k,q.lx,q.ly,q.r*0.8);q.vol--;}}
         if(q.life<=0||(!q.t&&q.vol<=0)||rigs.indexOf(q.rig)<0){parts.splice(i,1);continue;}
-        if(q.fx.testPoint(wp))continue;
+        if(q.fx!==b.getFixtureList())q.fx=b.getFixtureList(); // the part may have been shattered (new, smaller fixture)
+        if(q.fx&&q.fx.testPoint(wp))continue;
         var hv=b.getLinearVelocityFromWorldPoint(wp);q.vx=hv.x;q.vy=hv.y;q.skip=b;q.skT=0.12;q.on=null;
       }
       q.vy-=10*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt;
@@ -646,7 +647,7 @@
   function drawDecals(b,D,far){
     ctx.fillStyle=far?'rgba(80,4,7,0.9)':'rgba(112,6,10,0.88)';ctx.beginPath();
     for(var i=0;i<D.length;i++){var d=D[i],p=toScreen(b.getWorldPoint(Vec2(d.x,d.y))),rr=Math.max(1,d.s*cam.z);
-      ctx.moveTo(p.x+rr,p.y);ctx.arc(p.x,p.y,rr,0,7);
+      ctx.moveTo(p.x+rr,p.y);ctx.arc(p.x,p.y,rr,0,7);if(rr<3)continue; // satellites only when big enough to see
       var ox=Math.cos(d.a)*rr*0.9,oy=Math.sin(d.a)*rr*0.9;ctx.moveTo(p.x+ox+rr*0.55,p.y+oy);ctx.arc(p.x+ox,p.y+oy,rr*0.55,0,7);
       ctx.moveTo(p.x-oy*0.8+rr*0.4,p.y+ox*0.8);ctx.arc(p.x-oy*0.8,p.y+ox*0.8,rr*0.4,0,7);}
     ctx.fill();
@@ -787,7 +788,11 @@
   }
 
   var last=performance.now(),acc=0,injN=0;
-  function frame(t){
+  function frame(t){ // one bad frame must never stop the game: log it and keep going
+    try{frameInner(t);}catch(e){if(window.console)console.error(e);}
+    requestAnimationFrame(frame);
+  }
+  function frameInner(t){
     var dt=Math.min((t-last)/1000,0.05);last=t;
     var paused=userPaused||training&&pool.mode!=='workers'; // main-thread training: no time left for the live view
     if(!paused){
@@ -806,7 +811,7 @@
     if(camFollow){var fp=camFollow.bodies[3].getPosition();cam.x+=(fp.x-cam.x)*0.1;cam.y+=(fp.y+0.3-cam.y)*0.1;}
     if(camT){cam.x+=(camT.x-cam.x)*0.15;cam.y+=(camT.y-cam.y)*0.15;if(Math.abs(camT.x-cam.x)+Math.abs(camT.y-cam.y)<0.005)camT=null;}
     if(!paused)goreStep(Math.min(dt,0.05));
-    draw();if(++injN%10===0){injSync();hud();}requestAnimationFrame(frame);
+    draw();if(++injN%10===0){injSync();hud();}
   }
   window.EQ={rigs:function(){return rigs;},parts:function(){return parts;},cam:function(){return cam;},follow:function(){return camFollow;}}; // for poking at it from the console
   init();updateInfo();requestAnimationFrame(frame);
