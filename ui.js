@@ -245,12 +245,16 @@
       var H2=r.holeK||(r.holeK={});(H2[k]||(H2[k]=[])).push({x:lp.x,y:lp.y,r:0.0075+Math.random()*0.002});
       (r.hole||(r.hole=[])).push({k:k,x:lp.x,y:lp.y});
     }
-    if(RS.FLAGS.bleed)r.holes=(r.holes||0)+(ext?0.35:1);
+    // where it went in: the heart sits in the middle-front of the chest; chest (lungs), gut and pelvis hits are fatal over time
+    var Sc=r.scale||1,fr=lp.x*(r.dir||1),heart=k===1&&lp.y>-0.09*Sc&&lp.y<0.05*Sc&&fr>-0.03*Sc;
+    if(heart&&!r.heart){r.heart={x:lp.x,y:lp.y};if(gore){gL=layerK(r,k);gush(hp.x,hp.y,-d.x*1.5,-d.y*1.5,60,2.6,0.8);}}
+    var hw=ext?0.35:heart?10:k===1?5:k===2?3.2:k===3?2.4:1; // x0.25 = bleed weight (a torn-off leg is 1)
+    if(RS.FLAGS.bleed)r.holes=(r.holes||0)+hw;
     if(k===0&&RS.FLAGS.death!==0&&!r.dead){r.dead=true;r.ev=r.ev||[];}
     else if(k>=4&&k<nb&&!ext&&r.inj){var j=k-1;var pb=RS.FLAGS.realism===0?0.8:RS.FLAGS.realism===2?0.35:0.5;
       if(!r.inj.broken[j]&&!r.inj.gone[j]&&Math.random()<pb)RS.breakBone(r,j,true);}
     if(k<nb&&!r.dead){
-      RS.shot(r,k,lp.x,lp.y,d.x);
+      RS.shot(r,k,lp.x,lp.y,d.x,k>=1&&k<=3);
       if(!ext){var J=0.3;[1,3].forEach(function(q){var bq=r.bodies[q];bq.applyLinearImpulse(Vec2(d.x*J,d.y*J),bq.getWorldCenter(),true);});} // knocked back
     }
   }
@@ -412,7 +416,7 @@
   $('mSound').onclick=$('sSound').onclick=function(){tgl('oSound');audioInit();};
   $('mSet').onclick=$('sSet').onclick=function(){$('smenu').hidden=false;};$('sDone').onclick=function(){$('smenu').hidden=true;};
   $('rCrush').oninput=$('rGore').oninput=$('rReal').oninput=syncMenu;
-  $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];r.holeK=null;r.hole=null;r.holes=0;});pauseMenu(false);};
+  $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];r.holeK=null;r.hole=null;r.holes=0;r.heart=null;});pauseMenu(false);};
   $('mMain').onclick=function(){pauseMenu(false);init();var sp=$('splash');sp.hidden=false;sp.style.opacity=1;};
   $('bPlay').onclick=function(){var sp=$('splash');sp.style.transition='opacity .4s';sp.style.opacity=0;setTimeout(function(){sp.hidden=true;},400);audioInit();
     var h=$('hint');h.style.opacity=0.7;setTimeout(function(){h.style.opacity=0;},7000);};
@@ -462,7 +466,7 @@
   document.getElementById('hmRename').onclick=function(){var r=menuRig;closeMenu();if(r)openRename(r);};
   document.getElementById('hmFollow').onclick=function(){var r=menuRig;closeMenu();camFollow=camFollow===r?null:r;camT=null;};
   document.getElementById('hmTurn').onclick=function(){if(menuRig)turnAround(menuRig);closeMenu();};
-  document.getElementById('hmHeal').onclick=function(){var r=menuRig;closeMenu();if(!r)return;for(var k=0;k<RS.NJ;k++)RS.breakBone(r,k,false);r.blood=1;r.dead=false;r.koT=0;r.age=0;if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];r.holeK=null;r.hole=null;r.holes=0;r.shot=null;};
+  document.getElementById('hmHeal').onclick=function(){var r=menuRig;closeMenu();if(!r)return;for(var k=0;k<RS.NJ;k++)RS.breakBone(r,k,false);r.blood=1;r.dead=false;r.koT=0;r.age=0;if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];r.holeK=null;r.hole=null;r.holes=0;r.shot=null;r.heart=null;};
   document.getElementById('hmKill').onclick=function(){if(menuRig)menuRig.dead=true;closeMenu();};
   document.getElementById('hmRemove').onclick=function(){if(menuRig)removeRig(menuRig);closeMenu();};
   cv.addEventListener('pointerdown',function(){if(menuRig)closeMenu();$('spmenu').hidden=true;},true);
@@ -708,6 +712,11 @@
         var pb=c.b.getWorldPoint(c.j.getLocalAnchorB());if(Math.random()<0.25){gL=layerOf(r.bodies.indexOf(c.b));gush(pb.x,pb.y,0,0,1,0.3,1);} // the torn-off piece drips
         sp++;
       });
+      if(r.heart&&alive&&bl>0.02){ // shot through the heart: it pumps out of the hole with every beat
+        var ch=r.bodies[1],hp2=ch.getWorldPoint(Vec2(r.heart.x,r.heart.y)),cc=ch.getWorldCenter(),hx=hp2.x-cc.x,hy=hp2.y-cc.y,hl=Math.hypot(hx,hy)||1;
+        var hn=Math.round((1+12*beat)*Math.min(1,bl*1.5));gL=layerK(r,1);if(hn)spray(hp2,hx/hl,hy/hl,hn,(0.8+4*beat)*Math.min(1,0.3+bl));
+        if(newBeat)sfx('spurt',Math.min(1,bl+0.3));
+      }
       if(newBeat&&sp)sfx('spurt',Math.min(1,bl+0.2));
       spreadDecals(r,dt);soak(r,dt);
       // wounds ooze: drips start right on the skin at stumps and open fractures and trickle down the limb

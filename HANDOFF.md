@@ -270,3 +270,9 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
   - `hop` (foot): lifts the foot, hops on the other leg for 4.5 s with an upright assist; falling over turns into a short cower.
   - `hand`: stays up, hunched, the shot hand pulled to the chest and the other hand on it for 5 s.
 - Gunshots no longer knock it out straight away: smaller pain spikes (0.35 body, 0.25 hand/foot) and a short `wakeT` grace. Torso shots don't break the spine; hand/foot shots don't break bones and bleed less.
+
+## v0.2.14 — Fatal body shots, heart shots
+- Chest, gut and pelvis hits are mortal: `RS.shot(..., mortal)` makes the fall reaction never end (no getting up); the clutch weakens as blood drops; blood loss KOs then kills.
+- Bleed weight per hole (x0.25 in sim): heart 10, chest 5, gut 3.2, pelvis 2.4, limb 1, hand/foot 0.35. Full gore: heart out ~5 s, dead ~9 s; chest ~10 s / ~18 s; gut ~17 s / ~30 s.
+- Heart: a hit in the middle-front of the chest sets `r.heart`; it spurts from the hole with every heartbeat (`goreStep`) until it dies.
+- Headshots still kill instantly (unless Gore is None).
