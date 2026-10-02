@@ -12,7 +12,7 @@ var RS_DETW={"mu":[-0.0067241,-0.00027025,0.0024076,0.00022175,0.0021074,-0.0000
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -531,21 +531,25 @@ var RS=(function(){
   var COWER=[-0.45,-0.5,-0.4, 2.3,2.4,0.6, 1.7,-2.3,0.3]; // chin tucked, back curled, arms folded over the head, knees up
   function onGround(b){for(var c=b.getContactList();c;c=c.next)if(c.contact.isTouching()&&c.other.isStatic())return true;return false;}
   // ground impacts this tick (velocity change of a part while it touches the ground; pushes don't count because the
-  // shoved chest isn't on the ground): impT = worst of head/chest/pelvis (cowering), impD = worst of any part with
-  // head hits counting 1.4x (dying)
+  // shoved chest isn't on the ground): impT = worst of head/chest/pelvis (cowering), impD = how close any part came to a
+  // fatal hit (dying). Real falls (feet-first ~6% die vs ~45-57% head/front/side first; overall LD50 ~4 storeys):
+  // head hits kill from ~4-5 m head-first (dieHead), flat torso hits from ~12-16 m (dieTorso), feet-first only from
+  // ~16-20 m (dieLimb, internal injuries) - lower falls on the feet break legs/back instead
   function impacts(rig){
     var ps=rig.parts,n=ps.length,k;
     if(!rig.cpv)rig.cpv=new Float64Array(2*n);
+    rig.impS=0;
     var it=0,id=0,live=(rig.ticks=(rig.ticks||0)+1)>12; // ignore the settle right after spawning
     for(k=0;k<n;k++){
       var v=ps[k].getLinearVelocity(),d=0;
       if(live&&onGround(ps[k]))d=Math.hypot(v.x-rig.cpv[2*k],v.y-rig.cpv[2*k+1]);
       rig.cpv[2*k]=v.x;rig.cpv[2*k+1]=v.y;
       if(k===0)rig.impH=d;
+      if(k>=1&&k<=3&&d>rig.impS){rig.impS=d;rig.impSk=k;} // worst torso hit (spine fractures)
       if(k===0||k===1||k===3)it=Math.max(it,d);
-      id=Math.max(id,k===0?1.4*d:d);
+      id=Math.max(id,d/(k===0?FLAGS.dieHead:k<4?FLAGS.dieTorso:FLAGS.dieLimb));
     }
-    rig.impT=it;rig.impD=id;
+    rig.impT=it;rig.impD=id*FLAGS.dieImp; // impD > dieImp = dead
   }
   function cower(rig,tt,dt){
     var imp=FLAGS.cower?rig.impT||0:0,k;
@@ -578,7 +582,7 @@ var RS=(function(){
   // dragging a hand/foot/head away 120-130. Pulling apart: everything <35 except dragging (115-130).
   // Head hits (velocity change on the ground) above koImp knock it out for a few seconds: a big shove onto its back
   // gives ~4.5, a 3 m head-first drop ~6.6. Dying still uses dieImp (where head hits count 1.4x).
-  var BRK=[100,100,100, 60,60,60,105,100,80, 60,60,60,105,100,80],SEV=95;
+  var BRK=[130,115,115, 60,60,60,105,100,80, 60,60,60,105,100,80],SEV=95;
   var JNAMES=['neck','upper back','lower back','far shoulder','far elbow','far wrist','far hip','far knee','far ankle','near shoulder','near elbow','near wrist','near hip','near knee','near ankle'];
   var KIDS=[[0],[1],[2],[3,4,5],[4,5],[5],[6,7,8],[7,8],[8],[9,10,11],[10,11],[11],[12,13,14],[13,14],[14]];
   function injOf(rig){return rig.inj||(rig.inj={load:new Float64Array(NJ),pull:new Float64Array(NJ),broken:new Uint8Array(NJ),gone:new Uint8Array(NJ),t:0});}
@@ -607,6 +611,7 @@ var RS=(function(){
       }
       if(!I.broken[k]&&!j.isLimitEnabled()){var a=j.getJointAngle();if(a>=j.getLowerLimit()&&a<=j.getUpperLimit())j.enableLimit(true);}
     }
+    if(FLAGS.inj&&I.t>0.2&&(rig.impS||0)>9)breakBone(rig,rig.impSk===1?1:2,true); // landing flat and hard on the back/front: spine fracture
     if(FLAGS.inj&&(rig.impH||0)>FLAGS.koImp&&!rig.dead)rig.koT=Math.max(rig.koT||0,3+2*(rig.impH-FLAGS.koImp));
   }
   function limp1(rig,q){rig.rs[q]=rig.stiff[q]=0.003;var a=rig.ctrls[q].j.getJointAngle();rig.tgt[q]=a;rig.ctrls[q].target=a;}
