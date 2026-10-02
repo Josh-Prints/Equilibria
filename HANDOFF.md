@@ -279,3 +279,7 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.15 — Shot knockback
 - Every hit (alive or dead, headshots too) adds velocity along the shot to the whole body: torso 2.2 m/s, head 1.6, limbs 1.4, the hit part 2.2, plus a little lift. Hand/foot hits only kick that limb. A chest shot throws the pelvis ~1.6 m back.
+
+## v0.2.16 — Bigger gunshot wounds
+- Holes are drawn bigger (entry r 1.7–2.1 cm, at least 3.5 px on screen) as layered ragged blobs: bruise halo, torn flesh, wet red edge, black hole, a small wet glint.
+- Exit wound: the shot is walked through the hit part (`testPoint` steps of 4 mm) to where it leaves; a larger, more torn hole and an extra splat go there.
