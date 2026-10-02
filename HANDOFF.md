@@ -227,3 +227,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.3
 - Gore slider is 5 levels (None, Light, Medium, Heavy, Full) mapped through GLV=[0,3,5,8,10] to the old 0-10 strength; saved as eqOpts.goreL.
+
+## v0.2.4
+- Josh asked for no limits on people or blood: MAXR and MAXP are Infinity and floor stains are never dropped. (Per-part splat cap of 18 stays: extra splats grow existing ones, so no blood is lost; cullChunks(50) still clears old shattered pieces.)
