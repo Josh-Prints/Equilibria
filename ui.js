@@ -196,7 +196,7 @@
   // =====================================================================
   function init(){
     world=new planck.World({gravity:Vec2(0,-10)});
-    drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;
+    drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;camFollow=null;
     ground=world.createBody();ground.createFixture(Box(1000,1,Vec2(0,-1),0),{friction:0.9});
     spawn('stand');
   }
@@ -279,7 +279,7 @@
       mode='drag';
       var r0=rigOf(h.b),p0={x:p.x,y:p.y};clearTimeout(holdT);
       holdT=setTimeout(function(){var q=ptrs[e.pointerId];if(r0&&mode==='drag'&&q&&Math.hypot(q.x-p0.x,q.y-p0.y)<10){drag=null;mode='none';openMenu(r0,q);}},600);
-    }else{mode='pan';pan={x:p.x,y:p.y};}
+    }else{mode='pan';pan={x:p.x,y:p.y};camFollow=null;}
   });
   cv.addEventListener('pointermove',function(e){
     if(!ptrs[e.pointerId])return;
@@ -336,7 +336,7 @@
   syncMenu();
   // HUD: blood and state of each ragdoll (top right)
   function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-  var humanN=0,camT=null;
+  var humanN=0,camT=null,camFollow=null;
   function rigByNum(n){for(var i=0;i<rigs.length;i++)if(rigs[i].num===n)return rigs[i];return null;}
   document.getElementById('hud').addEventListener('click',function(e){ // tap a tab: pan the camera to that human
     var c=e.target.closest('.hc');if(!c)return;var r=rigByNum(+c.dataset.n);if(!r)return;
@@ -354,6 +354,7 @@
   var menuRig=null;
   function openMenu(r,at){
     menuRig=r;var m=document.getElementById('hmenu');m.hidden=false;
+    document.getElementById('hmFollow').textContent=camFollow===r?'Stop following':'Follow';
     var x=Math.min(W-m.offsetWidth-8,at.x+16),y=Math.max(8,Math.min(H-m.offsetHeight-120,at.y-m.offsetHeight/2));
     m.style.left=x+'px';m.style.top=y+'px';
   }
@@ -368,10 +369,11 @@
     var n=RS.buildRig(world,px,0,-(++group),{pose:pose,rootAng:r.parts[3].getAngle(),clear:0.01,dir:-r.dir,scale:r.scale,wid:r.wid});
     ['num','name','skin','blood','bl','koT','dead','headCrushed'].forEach(function(f){if(r[f]!=null)n[f]=r[f];});
     if(I)for(k=0;k<RS.NJ;k++){if(I.gone[k]&&(k%3===0||!I.gone[k-1]))RS.sever(n,k);else if(I.broken[k])RS.breakBone(n,k,true);}
-    n.ev=[];rigs[i]=n;
+    n.ev=[];rigs[i]=n;if(camFollow===r)camFollow=n;
   }
-  function removeRig(r){var i=rigs.indexOf(r);if(i<0)return;r.bodies.forEach(function(b){world.destroyBody(b);});rigs.splice(i,1);liveBufs.splice(i,1);}
+  function removeRig(r){var i=rigs.indexOf(r);if(i<0)return;if(camFollow===r)camFollow=null;r.bodies.forEach(function(b){world.destroyBody(b);});rigs.splice(i,1);liveBufs.splice(i,1);}
   document.getElementById('hmRename').onclick=function(){var r=menuRig;closeMenu();if(r)openRename(r);};
+  document.getElementById('hmFollow').onclick=function(){var r=menuRig;closeMenu();camFollow=camFollow===r?null:r;camT=null;};
   document.getElementById('hmTurn').onclick=function(){if(menuRig)turnAround(menuRig);closeMenu();};
   document.getElementById('hmHeal').onclick=function(){var r=menuRig;closeMenu();if(!r)return;for(var k=0;k<RS.NJ;k++)RS.breakBone(r,k,false);r.blood=1;r.dead=false;r.koT=0;r.age=0;if(r.bl)r.bl.fill(0);};
   document.getElementById('hmKill').onclick=function(){if(menuRig)menuRig.dead=true;closeMenu();};
@@ -392,7 +394,7 @@
     rigs.slice(-6).forEach(function(r,i){
       var bl=r.blood==null?1:r.blood,I=r.inj,nb=0,ng=0;
       if(I)for(var k=0;k<RS.NJ;k++){if(I.broken[k])nb++;if(I.gone[k]&&(k%3===0||!I.gone[k-1]))ng++;}
-      var st=r.dead?'Dead':r.koT>0?'Knocked out':r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
+      var st=r.dead?'Dead':r.koT>0?(r.koWhy==='pain'?'Passed out':'Knocked out'):r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
       html+='<div class="hc" data-n="'+r.num+'">'+(r.name?esc(r.name):'#'+r.num)+' '+st+(nb?' · '+nb+' broken':'')+(ng?' · '+ng+' lost':'')+'<div class="hb"><i style="width:'+Math.round(bl*100)+'%"></i></div></div>';
     });
     if(h.innerHTML!==html)h.innerHTML=html;
@@ -693,10 +695,12 @@
         applyDrag();world.step(DT,RS.VEL_IT,RS.POS_IT);acc-=DT;stepCount++;
       }
     }
+    if(camFollow&&rigs.indexOf(camFollow)<0)camFollow=null;
+    if(camFollow){var fp=camFollow.bodies[3].getPosition();cam.x+=(fp.x-cam.x)*0.1;cam.y+=(fp.y+0.3-cam.y)*0.1;}
     if(camT){cam.x+=(camT.x-cam.x)*0.15;cam.y+=(camT.y-cam.y)*0.15;if(Math.abs(camT.x-cam.x)+Math.abs(camT.y-cam.y)<0.005)camT=null;}
     if(!paused)goreStep(Math.min(dt,0.05));
     draw();if(++injN%10===0){injSync();hud();}requestAnimationFrame(frame);
   }
-  window.EQ={rigs:function(){return rigs;}}; // for poking at it from the console
+  window.EQ={rigs:function(){return rigs;},cam:function(){return cam;},follow:function(){return camFollow;}}; // for poking at it from the console
   init();updateInfo();requestAnimationFrame(frame);
 })();

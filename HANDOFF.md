@@ -178,3 +178,8 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - `buildRig` options `scale` (size), `wid` (build) and `dir` (-1 faces -x). A -x rig is built mirrored and the controller talks to it through `mirrorBody`/`mirrorJoint` wrappers (reflect x, flip angles/torques/limits), so every reflex works unchanged. `rig.bodies`/`rig.rc` are the real bodies/joints: the page draws with those, the sim uses `rig.parts`/`rig.ctrls`.
 - Page: each spawn gets scale 0.97-1.03, width 0.95-1.05 and its own skin tone; spawns avoid overlapping others. Holding a human opens a menu: Rename, Turn around (rebuilds mirrored in the same pose, keeping injuries/blood/name), Heal, Kill, Remove.
 - Version label (main + pause menu): beta vMAJOR.MINOR.PATCH. Josh's rule: every change bumps PATCH, bigger changes MINOR, releases MAJOR.
+
+## Pain and follow camera (beta v0.1.6)
+- `pain(rig,dt)` in sim.js: `rig.pain = 0.6*ache + painS`. Ache comes from broken joints (spine 0.25, joint roots 0.18, others 0.12) and stumps (0.3). `painS` spikes on break/sever/crush/big hits (via `ev()`) and decays 0.1/s. Pain > 1 passes them out for 4-7 s (`koWhy='pain'`, HUD "Passed out"), then `wakeT` gives 4 s before they can pass out again.
+- Rough results: one break never passes out; two breaks at once, an 8 m feet-first fall, or a torn-off arm does; every limb broken drifts in and out.
+- Hold menu "Follow" sets `camFollow`; the camera eases to that pelvis each frame. Panning, Remove or Reset cancels it; Turn around keeps it.

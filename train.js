@@ -632,7 +632,21 @@ var RS=(function(){
     ev(rig,'sever',k);
   }
   // events for the page (blood, sounds): {t:'break'|'sever'|'crush'|'hit', k: joint (or body for hits), d: strength}
-  function ev(rig,t,k,d){(rig.ev||(rig.ev=[])).push({t:t,k:k,d:d||0});if(rig.ev.length>64)rig.ev.shift();}
+  function ev(rig,t,k,d){
+    (rig.ev||(rig.ev=[])).push({t:t,k:k,d:d||0});if(rig.ev.length>64)rig.ev.shift();
+    var sp=t==='break'?(k<3?0.6:0.45):t==='sever'?0.8:t==='crush'?0.7:t==='hit'&&d>6?(d-6)*0.08:0; // pain spike
+    if(sp&&!rig.dead)rig.painS=Math.min(2,(rig.painS||0)+sp);
+  }
+  // PAIN (with FLAGS.inj): sharp pain from each new injury (fades over ~10 s) on top of a dull ache from every bone
+  // still broken or limb missing. Past 1 it passes out for a few seconds; after coming round it gets a few seconds'
+  // grace before it can pass out again (so "break everything" leaves it drifting in and out).
+  function pain(rig,dt){
+    var I=rig.inj,base=0,k;
+    if(I)for(k=0;k<NJ;k++){if(I.broken[k])base+=k<3?0.25:k%3===0?0.18:0.12;else if(I.gone[k]&&(k%3===0||!I.gone[k-1]))base+=0.3;}
+    rig.painS=Math.max(0,(rig.painS||0)-0.1*dt);rig.wakeT=Math.max(0,(rig.wakeT||0)-dt);
+    rig.pain=Math.min(2,0.6*base+rig.painS);
+    if(rig.pain>1&&!rig.dead&&!(rig.koT>0)&&rig.wakeT<=0){rig.koT=4+3*Math.min(1,rig.pain-1);rig.koWhy='pain';rig.painS*=0.5;}
+  }
   // CRUSH (FLAGS.crush): a limb part slammed into the ground hard enough is crushed (its joint breaks); harder still
   // and it's ripped off (with FLAGS.sever). A head slammed that hard is crushed: dead.
   // BLEED (FLAGS.bleed): each torn-off limb bleeds ~5%/s of its blood (heart pumping, slower as the blood runs out),
@@ -656,7 +670,7 @@ var RS=(function(){
       rig.bleedW=w;
       rig.blood=Math.max(0,rig.blood-0.05*w*(0.3+0.7*rig.blood)*(rig.dead?0.3:1)*dt);
       if(rig.blood<0.2&&!rig.dead){rig.dead=true;ev(rig,'bledout',0);}
-      else if(rig.blood<0.45&&!rig.dead)rig.koT=Math.max(rig.koT||0,0.5);
+      else if(rig.blood<0.45&&!rig.dead){rig.koT=Math.max(rig.koT||0,0.5);rig.koWhy='blood';}
     }
   }
   function injuries(rig,dt){
@@ -673,7 +687,8 @@ var RS=(function(){
       if(!I.broken[k]&&!j.isLimitEnabled()){var a=j.getJointAngle();if(a>=j.getLowerLimit()&&a<=j.getUpperLimit())j.enableLimit(true);}
     }
     if(FLAGS.inj&&I.t>0.2&&(rig.impS||0)>9)breakBone(rig,rig.impSk===1?1:2,true); // landing flat and hard on the back/front: spine fracture
-    if(FLAGS.inj&&(rig.impH||0)>FLAGS.koImp&&!rig.dead)rig.koT=Math.max(rig.koT||0,3+2*(rig.impH-FLAGS.koImp));
+    if(FLAGS.inj&&(rig.impH||0)>FLAGS.koImp&&!rig.dead){rig.koT=Math.max(rig.koT||0,3+2*(rig.impH-FLAGS.koImp));rig.koWhy='head';}
+    if(FLAGS.inj)pain(rig,dt);
   }
   function limp1(rig,q){rig.rs[q]=rig.stiff[q]=0.003;var a=rig.ctrls[q].j.getJointAngle();rig.tgt[q]=a;rig.ctrls[q].target=a;}
   function injLimp(rig){ // broken or severed joints (and the limb beyond them) can't be moved
@@ -752,7 +767,7 @@ var RS=(function(){
     if(rf&&(FLAGS.crush||FLAGS.bleed))crushBleed(rig,dt);
     if(rf&&FLAGS.die&&rig.impD>FLAGS.dieImp)rig.dead=true;
     if(rig.dead)return goLimp(rig,out);
-    if(rig.koT>0){rig.koT-=dt;if(rig.koT<=0)rig.age=0;goLimp(rig,out);rig.ko=true;return out;} // knocked out: limp until it comes round
+    if(rig.koT>0){rig.koT-=dt;if(rig.koT<=0){rig.age=0;rig.wakeT=4;}goLimp(rig,out);rig.ko=true;return out;} // knocked out: limp until it comes round
     rig.ko=false;
     var cowering=rf&&(FLAGS.cower||hurt(rig))&&cower(rig,tt,dt);rig.cowering=!!cowering;
     var gettingUp=!cowering&&rf&&FLAGS.getup&&getUp(rig,tt,dt);
