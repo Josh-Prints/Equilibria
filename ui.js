@@ -879,7 +879,7 @@
       var use=opt('oUse'),pd=opt('oPD'),reflex=opt('oReflex'),i;
       RS.FLAGS.air=RS.FLAGS.land=RS.FLAGS.fall=opt('oFall')?1:0;
       RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;RS.FLAGS.cower=opt('oCower')?1:0;RS.FLAGS.die=opt('oDie')?1:0;RS.FLAGS.protect=opt('oProtect')?1:0;RS.FLAGS.inj=opt('oInj')?1:0;var gv=goreV();RS.FLAGS.sever=opt('oSever')&&gv>=4?1:0;RS.FLAGS.shatter=gv>=7?1:0;RS.FLAGS.crush=1;RS.FLAGS.bleed=gv>0?1:0;RS.FLAGS.bleedMul=gv/10;RS.FLAGS.death=gv>0?1:0;if(!gv)RS.FLAGS.die=0;
-      RS.FLAGS.crushLimb=0.25*+$('rCrush').value;RS.FLAGS.crushImp=12*RS.FLAGS.crushLimb; // settings: 7 (default) = 1.75, harder to crush than before (1.25)
+      RS.FLAGS.crushLimb=+$('rCrush').value/7;RS.FLAGS.crushImp=14*RS.FLAGS.crushLimb; // settings: 7 (default) = real-world speeds
       while(acc>=DT){
         if((use||reflex)&&stepCount%SUB===0)for(i=0;i<rigs.length;i++)RS.act(rigs[i],use?ES.theta:ZERO_TH,liveBufs[i],liveRng,{delay:1,noise:0.005,reflex:reflex}); // reflexes run even when the policy is off (untrained = zero weights)
         if(pd)for(i=0;i<rigs.length;i++)RS.pdRig(rigs[i]);
