@@ -253,9 +253,10 @@
     if(k===0&&RS.FLAGS.death!==0&&!r.dead){r.dead=true;r.ev=r.ev||[];}
     else if(k>=4&&k<nb&&!ext&&r.inj){var j=k-1;var pb=RS.FLAGS.realism===0?0.8:RS.FLAGS.realism===2?0.35:0.5;
       if(!r.inj.broken[j]&&!r.inj.gone[j]&&Math.random()<pb)RS.breakBone(r,j,true);}
-    if(k<nb&&!r.dead){
-      RS.shot(r,k,lp.x,lp.y,d.x,k>=1&&k<=3);
-      if(!ext){var J=0.3;[1,3].forEach(function(q){var bq=r.bodies[q];bq.applyLinearImpulse(Vec2(d.x*J,d.y*J),bq.getWorldCenter(),true);});} // knocked back
+    if(k<nb&&!r.dead)RS.shot(r,k,lp.x,lp.y,d.x,k>=1&&k<=3);
+    if(k<nb){ // knocked back: the whole body gets shoved along the shot, hardest at the part that was hit (hands/feet: just that limb)
+      var kv=ext?0:k===0?1.6:k<4?2.2:1.4,kx=d.x,ky=Math.max(-0.3,d.y)+0.15;
+      r.bodies.forEach(function(bq,q){var w2=q===k?2.2:kv;if(ext&&Math.abs(q-k)>1)return;if(ext)w2=q===k?2:1;var v=bq.getLinearVelocity();bq.setLinearVelocity(Vec2(v.x+kx*w2,v.y+ky*w2*0.5));bq.setAwake(true);});
     }
   }
   function drawItems(){

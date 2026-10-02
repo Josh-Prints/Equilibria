@@ -276,3 +276,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Bleed weight per hole (x0.25 in sim): heart 10, chest 5, gut 3.2, pelvis 2.4, limb 1, hand/foot 0.35. Full gore: heart out ~5 s, dead ~9 s; chest ~10 s / ~18 s; gut ~17 s / ~30 s.
 - Heart: a hit in the middle-front of the chest sets `r.heart`; it spurts from the hole with every heartbeat (`goreStep`) until it dies.
 - Headshots still kill instantly (unless Gore is None).
+
+## v0.2.15 — Shot knockback
+- Every hit (alive or dead, headshots too) adds velocity along the shot to the whole body: torso 2.2 m/s, head 1.6, limbs 1.4, the hit part 2.2, plus a little lift. Hand/foot hits only kick that limb. A chest shot throws the pelvis ~1.6 m back.
