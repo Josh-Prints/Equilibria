@@ -203,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.16</div>
+  <div class="ver">beta v0.2.17</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -223,7 +223,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.16</div>
+  <div class="ver">beta v0.2.17</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1575,12 +1575,13 @@ var RS=(function(){
     // where it went in: the heart sits in the middle-front of the chest; chest (lungs), gut and pelvis hits are fatal over time
     var Sc=r.scale||1,fr=lp.x*(r.dir||1),heart=k===1&&lp.y>-0.09*Sc&&lp.y<0.05*Sc&&fr>-0.03*Sc;
     if(heart&&!r.heart){r.heart={x:lp.x,y:lp.y};if(gore){gL=layerK(r,k);gush(hp.x,hp.y,-d.x*1.5,-d.y*1.5,60,2.6,0.8);}}
-    var hw=ext?0.35:heart?10:k===1?5:k===2?3.2:k===3?2.4:1; // x0.25 = bleed weight (a torn-off leg is 1)
+    var leg=k>=4&&k<nb&&((k-4)%6===3||(k-4)%6===4),thigh=k>=4&&k<nb&&(k-4)%6===3;
+    var hw=ext?0.35:heart?10:k===1?5:k===2?3.2:k===3?2.4:thigh?2.2:1; // the thigh has the femoral artery // x0.25 = bleed weight (a torn-off leg is 1)
     if(RS.FLAGS.bleed)r.holes=(r.holes||0)+hw;
     if(k===0&&RS.FLAGS.death!==0&&!r.dead){r.dead=true;r.ev=r.ev||[];}
     else if(k>=4&&k<nb&&!ext&&r.inj){var j=k-1;var pb=RS.FLAGS.realism===0?0.8:RS.FLAGS.realism===2?0.35:0.5;
       if(!r.inj.broken[j]&&!r.inj.gone[j]&&Math.random()<pb)RS.breakBone(r,j,true);}
-    if(k<nb&&!r.dead)RS.shot(r,k,lp.x,lp.y,d.x,k>=1&&k<=3);
+    if(k<nb&&!r.dead)RS.shot(r,k,lp.x,lp.y,d.x,k>=1&&k<=3||leg);
     if(k<nb){ // knocked back: the whole body gets shoved along the shot, hardest at the part that was hit (hands/feet: just that limb)
       var kv=ext?0:k===0?1.6:k<4?2.2:1.4,kx=d.x,ky=Math.max(-0.3,d.y)+0.15;
       r.bodies.forEach(function(bq,q){var w2=q===k?2.2:kv;if(ext&&Math.abs(q-k)>1)return;if(ext)w2=q===k?2:1;var v=bq.getLinearVelocity();bq.setLinearVelocity(Vec2(v.x+kx*w2,v.y+ky*w2*0.5));bq.setAwake(true);});
