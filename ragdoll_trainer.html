@@ -203,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.15</div>
+  <div class="ver">beta v0.2.16</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -223,7 +223,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.15</div>
+  <div class="ver">beta v0.2.16</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1564,7 +1564,12 @@ var RS=(function(){
     if(gore){
       gL=layerK(r,k);gush(hp.x,hp.y,-d.x*0.6,-d.y*0.6,14,1.2,0.6);gush(hp.x,hp.y,d.x*2.5,d.y*2.5,30,2.4,0.5); // entry splash, exit spray
       addDecal(r,k,hp,0.03);splats(r,k,2,0.02);
-      var H2=r.holeK||(r.holeK={});(H2[k]||(H2[k]=[])).push({x:lp.x,y:lp.y,r:0.0075+Math.random()*0.002});
+      var H2=r.holeK||(r.holeK={}),HL=H2[k]||(H2[k]=[]),pb2=partOf(r,k),jag=function(){var a=[];for(var q=0;q<10;q++)a.push(0.7+Math.random()*0.6);return a;};
+      HL.push({x:lp.x,y:lp.y,r:0.017+Math.random()*0.004,j:jag(),a:Math.random()*6.28});
+      // exit wound: walk along the shot until it leaves this part; bigger and more torn than the way in
+      var fx2=null;for(var f2=pb2.getFixtureList();f2;f2=f2.getNext())if(f2.testPoint(Vec2(hp.x+d.x*0.004,hp.y+d.y*0.004))){fx2=f2;break;}
+      if(fx2){var ex=hp.x,ey=hp.y;for(var st=0;st<80;st++){var nx=ex+d.x*0.004,ny=ey+d.y*0.004;if(!fx2.testPoint(Vec2(nx,ny)))break;ex=nx;ey=ny;}
+        var le=pb2.getLocalPoint(Vec2(ex,ey));HL.push({x:le.x,y:le.y,r:0.023+Math.random()*0.006,j:jag(),a:Math.random()*6.28,exit:1});addDecal(r,k,Vec2(ex,ey),0.04);}
       (r.hole||(r.hole=[])).push({k:k,x:lp.x,y:lp.y});
     }
     // where it went in: the heart sits in the middle-front of the chest; chest (lungs), gut and pelvis hits are fatal over time
@@ -2130,11 +2135,16 @@ var RS=(function(){
   }
   var SHADE=[[150,14,18],[118,8,12],[86,4,8],[66,10,8]]; // fresh to old, dark and brownish
   function shade(c,o,far){var q=SHADE[c],m=far?0.75:1;return 'rgba('+(q[0]*m|0)+','+(q[1]*m|0)+','+(q[2]*m|0)+','+o+')';}
-  function drawHoles(b,A,far){ // dark puncture with a raw red rim
-    if(!A||!A.length)return;var z=cam.z;
-    for(var i=0;i<A.length;i++){var h=A[i],p=toScreen(b.getWorldPoint(Vec2(h.x,h.y))),rr=Math.max(1.2,h.r*z);
-      ctx.fillStyle=far?'#4a0d0d':'#6e1414';ctx.beginPath();ctx.arc(p.x,p.y,rr*1.6,0,7);ctx.fill();
-      ctx.fillStyle='#120404';ctx.beginPath();ctx.arc(p.x,p.y,rr,0,7);ctx.fill();}
+  function drawHoles(b,A,far){ // bruised skin, a ragged wet red rim, then the dark hole (exit wounds bigger and more torn)
+    if(!A||!A.length)return;var z=cam.z,an=b.getAngle();
+    function blob(p,rr,h,sc){ctx.beginPath();for(var q=0;q<10;q++){var t=h.a+an*0+q*0.628,m=rr*(1+(h.j[q]-1)*sc);var x=p.x+Math.cos(t)*m,y=p.y+Math.sin(t)*m;if(q)ctx.lineTo(x,y);else ctx.moveTo(x,y);}ctx.closePath();ctx.fill();}
+    for(var i=0;i<A.length;i++){var h=A[i],p=toScreen(b.getWorldPoint(Vec2(h.x,h.y))),rr=Math.max(h.exit?4.5:3.5,h.r*z),e=h.exit?1.6:1;
+      if(!h.j){h.j=[1,1,1,1,1,1,1,1,1,1];h.a=0;}
+      ctx.fillStyle=far?'rgba(40,10,30,0.35)':'rgba(70,20,50,0.35)';ctx.beginPath();ctx.arc(p.x,p.y,rr*2.6,0,7);ctx.fill(); // bruise
+      ctx.fillStyle=far?'#5a0f0f':'#8e1a16';blob(p,rr*1.7,h,0.8*e); // torn flesh
+      ctx.fillStyle=far?'#7a1a14':'#b8281e';blob(p,rr*1.25,h,0.6*e); // wet red edge
+      ctx.fillStyle='#0d0202';blob(p,rr*(h.exit?0.85:0.75),h,0.5*e); // the hole
+      ctx.fillStyle='rgba(255,200,190,0.35)';ctx.beginPath();ctx.arc(p.x-rr*0.35,p.y-rr*0.35,Math.max(0.6,rr*0.18),0,7);ctx.fill();} // glint of wet
   }
   function drawDecals(b,D,far,LN){
     var i,d,z=cam.z,o0=toScreen(b.getPosition()),an=b.getAngle(),ca=Math.cos(an),sa=Math.sin(an);
