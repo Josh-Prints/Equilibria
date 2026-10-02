@@ -504,7 +504,7 @@
         if(f.testPoint(Vec2(q.x,q.y)))return {r:rigs[i],k:k,b:b,f:f};}}
     return null;
   }
-  function stick(q,h){var lp=h.b.getLocalPoint(Vec2(q.x,q.y));q.on=h.b;q.fx=h.f;q.rig=h.r;q.k=h.k;q.lx=lp.x;q.ly=lp.y;q.L=layerK(h.r,h.k);if(q.vol==null)q.vol=2+(Math.random()*6|0);q.ph=Math.random()*6;}
+  function stick(q,h){var lp=h.b.getLocalPoint(Vec2(q.x,q.y));q.on=h.b;q.fx=h.f;q.rig=h.r;q.k=h.k;q.lx=lp.x;q.ly=lp.y;q.tl=null;q.L=layerK(h.r,h.k);if(q.vol==null)q.vol=2+(Math.random()*6|0);q.ph=Math.random()*6;}
   function stain(x,r){
     for(var i=stains.length-1;i>=Math.max(0,stains.length-40);i--){var s=stains[i];if(Math.abs(s.x-x)<s.w*0.6){s.w=Math.min(2,s.w+r*0.9);s.h=Math.min(0.05,s.h+r*0.12);return;}}
     stains.push({x:x,w:r*5,h:0.01+r*0.4});if(stains.length>300)stains.shift();
@@ -575,6 +575,7 @@
       if(q.on){ // running over the skin: trickles downhill across the part (leaving a smear), drips off the edge
         var b=q.on,ha=b.getAngle(),c=Math.cos(ha),sn=Math.sin(ha),spd=q.t?0.12:0.16,wob=0.35*Math.sin(q.ph+=dt*5);
         q.lx+=(-sn+wob*c)*spd*dt;q.ly+=(-c-wob*sn)*spd*dt;
+        var tl=q.tl||(q.tl=[q.lx,q.ly]);if(Math.hypot(tl[tl.length-2]-q.lx,tl[tl.length-1]-q.ly)>0.008){tl.push(q.lx,q.ly);if(tl.length>16)tl.splice(0,2);}
         var wp=b.getWorldPoint(Vec2(q.lx,q.ly));q.x=wp.x;q.y=wp.y;q.life-=q.t?dt:dt*0.4;
         if(!q.t){q.tr=(q.tr||0)+spd*dt;if(q.tr>0.018){q.tr=0;addDecalL(q.rig,q.k,q.lx,q.ly,q.r*0.8);q.vol--;}}
         if(q.life<=0||(!q.t&&q.vol<=0)||rigs.indexOf(q.rig)<0){parts.splice(i,1);continue;}
@@ -616,7 +617,7 @@
     ctx.save();ctx.imageSmoothingEnabled=false;ctx.fillStyle=worldPat(groundPattern(),64);ctx.fillRect(0,gy,W,H-gy+1);
     ctx.fillStyle='#6d727a';ctx.fillRect(0,gy,W,Math.max(2,0.03*cam.z)); // lit top edge
     ctx.fillStyle='#4a0606';
-    stains.forEach(function(s){var a=toScreen(Vec2(s.x,0));ctx.globalAlpha=0.92;ctx.beginPath();ctx.ellipse(a.x,a.y+1,Math.max(1.5,s.w*cam.z*0.5),Math.max(1,s.h*cam.z),0,0,Math.PI*2);ctx.fill();});
+    stains.forEach(function(s){var a=toScreen(Vec2(s.x,0));ctx.globalAlpha=0.92;ctx.beginPath();ctx.ellipse(a.x,a.y+1,Math.max(0.5,s.w*cam.z*0.5),Math.max(0.4,s.h*cam.z),0,0,Math.PI*2);ctx.fill();});
     ctx.restore();
   }
   function mix(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
@@ -644,7 +645,7 @@
   }
   function drawDecals(b,D,far){
     ctx.fillStyle=far?'rgba(80,4,7,0.9)':'rgba(112,6,10,0.88)';ctx.beginPath();
-    for(var i=0;i<D.length;i++){var d=D[i],p=toScreen(b.getWorldPoint(Vec2(d.x,d.y))),rr=Math.max(1,d.s*cam.z);
+    for(var i=0;i<D.length;i++){var d=D[i],p=toScreen(b.getWorldPoint(Vec2(d.x,d.y))),rr=Math.max(0.4,d.s*cam.z);
       ctx.moveTo(p.x+rr,p.y);ctx.arc(p.x,p.y,rr,0,7);if(rr<3)continue; // satellites only when big enough to see
       var ox=Math.cos(d.a)*rr*0.9,oy=Math.sin(d.a)*rr*0.9;ctx.moveTo(p.x+ox+rr*0.55,p.y+oy);ctx.arc(p.x+ox,p.y+oy,rr*0.55,0,7);
       ctx.moveTo(p.x-oy*0.8+rr*0.4,p.y+ox*0.8);ctx.arc(p.x-oy*0.8,p.y+ox*0.8,rr*0.4,0,7);}
@@ -690,15 +691,23 @@
     });
     ctx.lineCap='butt';
   }
+  // liquid drawn as streaks: a falling drop is a short line along its velocity, a drop running over the skin is
+  // a trickle through its recent path; widths come from the drop size in metres, so it all scales with zoom
   function drawBlood(L){
-    var i,q,sc,rr;
-    ctx.fillStyle='#8a0a0a';ctx.beginPath();
-    for(i=0;i<parts.length;i++){q=parts[i];if(q.g||q.t||(q.L==null?2:q.L)!==L)continue;sc=toScreen(q);rr=Math.max(1.2,q.r*cam.z);
-      if(q.on){ctx.moveTo(sc.x+rr*0.6,sc.y);ctx.arc(sc.x,sc.y,rr*0.6,0,7);}else ctx.rect(sc.x-rr/2,sc.y-rr/2,rr,rr);}
-    ctx.fill();ctx.fillStyle='#74c0f0';ctx.beginPath(); // tears
-    for(i=0;i<parts.length;i++){q=parts[i];if(!q.t||(q.L==null?2:q.L)!==L)continue;sc=toScreen(q);rr=Math.max(2.5,q.r*cam.z);ctx.moveTo(sc.x+rr/2,sc.y);ctx.arc(sc.x,sc.y,rr/2,0,7);}
-    ctx.fill();ctx.fillStyle='#5a0505';ctx.beginPath();
-    for(i=0;i<parts.length;i++){q=parts[i];if(!q.g||(q.L==null?2:q.L)!==L)continue;sc=toScreen(q);rr=Math.max(2,q.r*cam.z);ctx.moveTo(sc.x+rr,sc.y);ctx.arc(sc.x,sc.y,rr,0,7);}
+    var i,q,sc,rr,z=cam.z,B={},T={},k;
+    function seg(bk,w,pts){var key=Math.max(0.5,Math.round(w*2)/2);(bk[key]||(bk[key]=[])).push(pts);}
+    for(i=0;i<parts.length;i++){q=parts[i];if(q.g||(q.L==null?2:q.L)!==L)continue;
+      var bk=q.t?T:B,w=q.r*z*(q.t?0.75:0.9),pts=[];
+      if(q.on&&q.tl){for(k=0;k<q.tl.length;k+=2){sc=toScreen(q.on.getWorldPoint(Vec2(q.tl[k],q.tl[k+1])));pts.push(sc.x,sc.y);}sc=toScreen(q);pts.push(sc.x,sc.y);w*=0.8;}
+      else{sc=toScreen(q);var vx=q.vx*0.035*z,vy=-q.vy*0.035*z,vl=Math.hypot(vx,vy),mx=Math.max(w*1.5,0.12*z);if(vl>mx){vx*=mx/vl;vy*=mx/vl;}pts.push(sc.x-vx,sc.y-vy,sc.x,sc.y);}
+      seg(bk,w,pts);}
+    ctx.lineCap='round';ctx.lineJoin='round';
+    function flush(bk,col){for(var key in bk){var a=bk[key];ctx.beginPath();for(var j=0;j<a.length;j++){var p=a[j];ctx.moveTo(p[0],p[1]);for(var m=2;m<p.length;m+=2)ctx.lineTo(p[m],p[m+1]);if(p.length===2)ctx.lineTo(p[0]+0.01,p[1]);}ctx.lineWidth=+key;ctx.strokeStyle=col;ctx.stroke();}}
+    flush(B,'rgba(118,6,9,0.93)');
+    flush(T,'rgba(186,208,222,0.55)'); // tears: clear, faintly blue-grey
+    ctx.lineCap='butt';ctx.lineJoin='miter';
+    ctx.fillStyle='#5a0505';ctx.beginPath();
+    for(i=0;i<parts.length;i++){q=parts[i];if(!q.g||(q.L==null?2:q.L)!==L)continue;sc=toScreen(q);rr=Math.max(0.6,q.r*z);ctx.moveTo(sc.x+rr,sc.y);ctx.arc(sc.x,sc.y,rr,0,7);}
     ctx.fill();
   }
   function draw(){
