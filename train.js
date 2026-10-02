@@ -801,9 +801,9 @@ var RS=(function(){
   //          and it keeps holding it while it's down. 'hop': shot in the foot, it lifts that foot and hops on the other.
   //  'hand': shot in the hand, it stays up, hunches and clutches that hand to its chest with the other one.
   // The hands are pulled to the wound by small impulses (equal and opposite on the wounded part), arms gone soft.
-  function shot(rig,k,lx,ly,dx){
+  function shot(rig,k,lx,ly,dx,mortal){
     var b=k-4,kind=k>=4&&b%6===2?'hand':k>=4&&b%6===5?'hop':'fall';
-    var T=kind==='fall'?8:kind==='hop'?4.5:5;
+    var T=kind==='fall'?(mortal||rig.shot&&rig.shot.T>1e6?1e9:8):kind==='hop'?4.5:5; // shot in the body: it never gets back up
     if(rig.shot&&rig.shot.kind==='fall'&&kind!=='fall')kind='fall'; // already going down: keep going down
     rig.shot={k:k,lx:lx,ly:ly,t:0,T:kind==='fall'?Math.max(T,rig.shot&&rig.shot.kind==='fall'?rig.shot.T-rig.shot.t:0):T,kind:kind,hp:0,dx:dx||0};
     rig.wakeT=Math.max(rig.wakeT||0,kind==='fall'?2.5:4); // a moment of adrenaline before the pain can knock it out
@@ -851,7 +851,7 @@ var RS=(function(){
   function shotArms(rig,tt,dt){ // after everything else: the hands go to the wound
     var S=rig.shot;if(!S||S.t>=S.T)return;
     var ps=rig.bodies,K=ps[S.k];if(!K)return;
-    var w=K.getWorldPoint(Vec2(S.lx,S.ly)),fade=Math.min(1,(S.T-S.t)/0.8);
+    var w=K.getWorldPoint(Vec2(S.lx,S.ly)),fade=Math.min(1,(S.T-S.t)/0.8)*Math.min(1,0.15+1.2*(rig.blood==null?1:rig.blood)); // weaker as it bleeds out
     if(S.kind==='hand'){
       var far=S.k<10,oh=far?12:6,c=ps[1].getWorldPoint(Vec2(0.09*(rig.dir||1),0.02));
       softArm(rig,far?0:6,0.06);softArm(rig,far?6:0,0.06);
