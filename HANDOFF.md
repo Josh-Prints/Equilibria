@@ -213,3 +213,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.0
 - Minor version bump covering the v0.1.x gore/injury work (pass-out, crying, strands, shatter, soft broken-joint limits, liquid streams, spreading blood).
+
+## v0.2.1
+- Parts lying in a floor pool soak it up: `soak()` in ui.js adds splats at polygon vertices touching a stain (y<0.03) and shrinks the stain a little. When a part is at the 18-splat cap it grows the splat already there or swaps out the smallest, so the contact side still shows.
