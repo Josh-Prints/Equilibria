@@ -1,7 +1,7 @@
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:15,crushLimb:1,ripImp:1.6,strands:1,groggyT:5,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:15,crushLimb:1.1,ripImp:1.6,shatter:1,strands:1,groggyT:5,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -614,17 +614,55 @@ var RS=(function(){
     if(on){rig.ctrls[k].j.enableLimit(false);if(k===0)rig.dead=true;ev(rig,'break',k);}
     else rig.age=Math.min(rig.age,0.3); // healed: the limit comes back once the joint is inside its range again (below)
   }
-  function sever(rig,k){
+  function addStrand(rig,k,A,B,la,lb,wt,o){ // a bundle of strings (one rope) between two bodies
+    o=o||{};var L0=o.L||0.06,w=A.getWorld(),rp=w.createJoint(planck.RopeJoint({maxLength:L0,localAnchorA:Vec2(la.x,la.y),localAnchorB:Vec2(lb.x,lb.y)},A,B));
+    (rig.strands||(rig.strands=[])).push({j:rp,k:k,A:A,B:B,la:Vec2(la.x,la.y),lb:Vec2(lb.x,lb.y),L:L0,max:o.max||0.3+0.15*Math.random(),wt:Math.max(o.minW||5,wt),fs:0,n:o.n||2+(Math.random()*3|0),thin:!!o.thin,seed:Math.random()*6.28});
+  }
+  function sever(rig,k,noStr){
     var I=injOf(rig);if(I.gone[k]||k<3)return; // limbs only
     var j=rig.ctrls[k].j,rj=j._r||j,w=rj.getBodyA().getWorld(),A=rj.getBodyA(),B=rj.getBodyB(),la=rj.getLocalAnchorA(),lb=rj.getLocalAnchorB();
     w.destroyJoint(rj);
-    if(FLAGS.strands){ // still hanging on by strands of muscle, tendon and gut: they stretch under a pull and snap
+    if(FLAGS.strands&&!noStr){ // still hanging on by strands of muscle, tendon and gut: they stretch under a pull and snap
       var wt=0;KIDS[k].forEach(function(q){if(!I.gone[q])wt+=rig.parts[q+1].getMass()*10;}); // weight of what's hanging off it
-      var L0=0.06,rp=w.createJoint(planck.RopeJoint({maxLength:L0,localAnchorA:Vec2(la.x,la.y),localAnchorB:Vec2(lb.x,lb.y)},A,B));
-      (rig.strands||(rig.strands=[])).push({j:rp,k:k,A:A,B:B,la:Vec2(la.x,la.y),lb:Vec2(lb.x,lb.y),L:L0,max:0.3+0.15*Math.random(),wt:Math.max(5,wt),fs:0,n:2+(Math.random()*3|0),seed:Math.random()*6.28});
+      addStrand(rig,k,A,B,la,lb,wt);
     }
     KIDS[k].forEach(function(q){I.gone[q]=1;I.broken[q]=0;});
     ev(rig,'sever',k);
+  }
+  // SHATTER (FLAGS.shatter): a crushed limb part breaks into 2-4 chunks along its length. Each gap is either clean
+  // (the chunks fly apart) or still held by a few thin strings; same for the stump end and whatever hung off the far end.
+  // The part's own body becomes the chunk at the joint end; the others are new bodies listed in rig.chunks {b,k}.
+  function shatter(rig,j,hard){
+    var I=injOf(rig);if(I.gone[j])return;
+    var rj=rig.ctrls[j].j,rj=rj._r||rj,B=rj.getBodyB(),lb=rj.getLocalAnchorB(),w=B.getWorld(),k=j+1;
+    var nx=j%3<2&&!I.gone[j+1]?rig.ctrls[j+1].j:null,nr=nx?(nx._r||nx):null,C=nr?nr.getBodyB():null,ncA=nr?nr.getLocalAnchorA():null,ncB=nr?nr.getLocalAnchorB():null;
+    sever(rig,j,hard&&Math.random()<0.5);
+    if(nr){w.destroyJoint(nr);}
+    var f=B.getFixtureList(),vs=f.getShape().m_vertices,hx=0,hy=0,i;for(i=0;i<vs.length;i++){hx=Math.max(hx,Math.abs(vs[i].x));hy=Math.max(hy,Math.abs(vs[i].y));}
+    var ax=hx>hy?0:1,half=ax?hy:hx,thick=ax?hx:hy,sgn=(ax?lb.y:lb.x)>=0?1:-1; // long axis, and which end the joint is at
+    var n=2+(Math.random()*(hard?3:2)|0),cuts=[0],t=0;for(i=1;i<n;i++){t+=(1/n)*(0.75+0.5*Math.random());cuts.push(Math.min(0.9,t));}cuts.push(1);
+    var den=f.getDensity(),fr=f.getFriction(),g=f.getFilterGroupIndex(),ud=B.getUserData(),ang=B.getAngle(),av=B.getAngularVelocity();
+    function seg(a,b){var c=sgn*half*(1-(a+b)),h=half*(b-a);return {c:c,h:h};} // along the axis, from the joint end
+    var prev=null,prevEnd=null,pieces=[];
+    for(i=0;i<n;i++){
+      var sg=seg(cuts[i],cuts[i+1]),lc=ax?Vec2(0,sg.c):Vec2(sg.c,0),hb=ax?Box(thick*(0.85+0.15*Math.random()),sg.h*0.92,lc,0):Box(sg.h*0.92,thick*(0.85+0.15*Math.random()),lc,0),body;
+      if(i===0){B.destroyFixture(f);B.createFixture(hb,{density:den,friction:fr,restitution:0,filterGroupIndex:g});body=B;}
+      else{
+        var wp=B.getWorldPoint(lc);body=w.createBody({type:'dynamic',position:wp,angle:ang});
+        body.createFixture(ax?Box(thick*(0.85+0.15*Math.random()),sg.h*0.92):Box(sg.h*0.92,thick*(0.85+0.15*Math.random())),{density:den,friction:fr,restitution:0,filterGroupIndex:g});
+        var v=B.getLinearVelocityFromWorldPoint(wp),kick=hard?2.5:1.2;
+        body.setLinearVelocity(Vec2(v.x+(Math.random()-0.5)*kick,v.y+Math.random()*kick));body.setAngularVelocity(av+(Math.random()-0.5)*8);
+        body.setUserData(ud);(rig.chunks||(rig.chunks=[])).push({b:body,k:k});
+        lc=Vec2(0,0);
+      }
+      var near=ax?Vec2(lc.x,lc.y+sgn*sg.h*0.9):Vec2(lc.x+sgn*sg.h*0.9,lc.y),far=ax?Vec2(lc.x,lc.y-sgn*sg.h*0.9):Vec2(lc.x-sgn*sg.h*0.9,lc.y);
+      if(prev&&Math.random()>(hard?0.55:0.3))addStrand(rig,j,prev,body,prevEnd,near,Math.min(prev.getMass(),body.getMass())*10,{L:0.03,n:3+(Math.random()*3|0),thin:true,minW:1.5,max:0.15+0.15*Math.random()});
+      pieces.push(body);prev=body;prevEnd=far;
+    }
+    if(C){ // whatever hung off the far end (hand, foot, forearm...) stays in one piece
+      var last=pieces[pieces.length-1];
+      if(Math.random()>(hard?0.5:0.25))addStrand(rig,j,last,C,prevEnd,ncB,C.getMass()*10,{L:0.04,n:3+(Math.random()*2|0),thin:true,minW:2});
+    }
   }
   // events for the page (blood, sounds): {t:'break'|'sever'|'crush'|'hit', k: joint (or body for hits), d: strength}
   function ev(rig,t,k,d){
@@ -658,7 +696,8 @@ var RS=(function(){
         if(k===0){if(!rig.dead){rig.dead=true;ev(rig,'crush',0,d);}continue;}
         if(k<4)continue;
         var j=k-1;if(I.gone[j])continue;
-        if(FLAGS.sever&&d>lim*FLAGS.ripImp){ev(rig,'crush',j,d);sever(rig,j);}
+        if(FLAGS.shatter&&FLAGS.sever){ev(rig,'crush',j,d);shatter(rig,j,d>lim*FLAGS.ripImp);}
+        else if(FLAGS.sever&&d>lim*FLAGS.ripImp){ev(rig,'crush',j,d);sever(rig,j);}
         else if(!I.broken[j]){ev(rig,'crush',j,d);breakBone(rig,j,true);}
       }
     }
@@ -931,7 +970,7 @@ var RS=(function(){
     return {mean:sum/all.length,best:best};
   }
 
-  return {JNAMES:JNAMES,breakBone:breakBone,sever:sever,hurt:hurt,DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},GU:GU,FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
+  return {JNAMES:JNAMES,breakBone:breakBone,sever:sever,shatter:shatter,hurt:hurt,DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},GU:GU,FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
     esNoise:esNoise,esStep:esStep,migrate:migrate,runEpisode:runEpisode,evalCandidate:evalCandidate,sampleScenario:sampleScenario,fk:fk,
     NP:NP,NI:NI,NO:NO,NJ:NJ,DT:DT,SUB:SUB,POLICY_HZ:POLICY_HZ,VEL_IT:VEL_IT,POS_IT:POS_IT,JT:JT,ORDER:ORDER,CASES:CASES,wrap:wrap};
 })();

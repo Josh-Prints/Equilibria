@@ -197,3 +197,9 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Running drips: about 35% of blood drops (20% of spray, all tears) are "stickers". When one is inside a body part (`hitBody`), it sticks (`q.on`), trickles downhill over the part leaving smear splats, drips off the edge, and can land on the next part down. Tears run the same way but leave no smear.
 - Crush thresholds are per part: head `crushImp` 15, limbs `CRUSHL`=[4,7,11,5,4.5,11] (upper arm, forearm, hand, thigh, shin, foot) × `crushLimb`. A limb rips off at ×`ripImp` (1.6). Big parts barely change speed when they hit, which is why their numbers are low.
 - Knockouts last longer: a head KO is 5+3·excess s, a pain KO 6-10 s.
+
+## v0.1.12: crushed limbs shatter
+- `shatter(rig,j,hard)` (FLAGS.shatter) runs when a limb part is crushed. It cuts the part into 2-4 chunks along its long axis. The original body keeps the joint-end chunk; the rest are new bodies in `rig.chunks` {b,k}, and the UI numbers them 16+ (`partOf` and `layerK`).
+- Each gap between chunks either flies apart (30% of the time, 55% when hard) or is held by a thin strand (`addStrand`, `thin:true`, 3-5 strings, snaps easily). The joints to the stump and to the next part down are also replaced by strands, or cut clean.
+- The UI draws chunks raw and bloody on their limb's layer. Drips can run over chunks, and removing or turning a rig destroys its chunks too.
+- `crushLimb` is now 1.1: in test throws, a limb got shattered in about half of them.
