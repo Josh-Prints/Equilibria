@@ -140,13 +140,13 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bClean">Clean up blood</button>
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
-  <div class="ver">beta v0.2.2</div>
+  <div class="ver">beta v0.2.3</div>
 </div>
 
 <div id="smenu" class="ov" hidden>
   <h2>Settings</h2>
   <div class="sl"><div class="slh"><span>Crush threshold</span><b id="vCrush">7</b></div><input type="range" id="rCrush" min="1" max="10" step="1" value="7"><div class="sld"><span>crushes easily</span><span>almost never</span></div></div>
-  <div class="sl"><div class="slh"><span>Gore</span><b id="vGore">10</b></div><input type="range" id="rGore" min="0" max="10" step="1" value="10"><div class="sld"><span>none</span><span>full</span></div></div>
+  <div class="sl"><div class="slh"><span>Gore</span><b id="vGore">Full</b></div><input type="range" id="rGore" min="0" max="4" step="1" value="4"><div class="sld"><span>none</span><span>full</span></div></div>
   <div class="slx" id="gDesc"></div>
   <button id="sDone">Done</button>
 </div>
@@ -155,7 +155,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <div><span class="tag">BETA</span></div>
   <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
   <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
-  <div class="ver">beta v0.2.2</div>
+  <div class="ver">beta v0.2.3</div>
   <button id="bPlay">Play</button>
   <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sSet" class="tg sm">Settings</button></div>
 </div>
