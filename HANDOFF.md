@@ -169,3 +169,7 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - The sim pushes events to `rig.ev` (hit/break/crush/sever/bledout); ui.js `goreStep` turns them into blood particles, gibs, ground stains, heartbeat stump spurts and sounds.
 - Sounds are synthesized with Web Audio (no files): thuds, bone crunches, squelches, spurts, splats, plus a wind/room-tone ambient bed. Audio starts on the first tap (browser rule); `navigator.audioSession.type='playback'` lets iPhones play it with the silent switch on.
 - Visuals: skin-filled parts (paler as it bleeds out, bloodied where hurt), dirt ground texture. `window.EQ.rigs()` exposes the rigs for console poking.
+
+## Alpha shell (main menu, pause menu)
+- Main menu (#splash): Play, Sound and Blood & gore toggles (saved in localStorage). Pause button opens #pmenu: Resume, Slow motion, Sound, Blood & gore, Clean up blood, Reset scene, Main menu.
+- Debug panel and every behaviour switch live in hidden divs (checkboxes still drive ui.js). HUD top right shows each ragdoll's state and blood. Max 10 ragdolls (oldest removed).

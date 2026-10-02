@@ -6,16 +6,16 @@ html='''<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Equilibria</title>
+<title>Equilibria (alpha)</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2c3035">
 <style>
-:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f2f2f2;--fg:#111;--btn:#ddd;--panel:#ffffffd9}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111;--fg:#eee;--btn:#333;--panel:#222d}}
-:root[data-theme="dark"]{--bg:#111;--fg:#eee;--btn:#333;--panel:#222d}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#2c3035;--fg:#e6e9ed;--btn:#3d434b;--panel:#23272cdd}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--fg);font-family:system-ui,Arial,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 canvas#c{display:block;width:100%;height:100%;touch-action:none}
 #bar{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;justify-content:center;flex-wrap:wrap;padding:0 8px}
 button{font:600 15px system-ui,Arial,sans-serif;padding:11px 14px;border:0;border-radius:10px;background:var(--btn);color:var(--fg)}
-#hint{position:fixed;bottom:calc(112px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;font-size:12px;opacity:.7;color:#dfe3e8;pointer-events:none;padding:0 8px}
+#hint{position:fixed;bottom:calc(112px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;font-size:12px;opacity:0;color:#dfe3e8;pointer-events:none;padding:0 8px}
 #panels{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));left:8px;display:flex;flex-direction:column;gap:6px;max-height:calc(100% - 150px);overflow:auto;max-width:calc(100% - 16px)}
 details{background:var(--panel);border-radius:10px;padding:6px 10px;font-size:14px;backdrop-filter:blur(6px)}
 summary{font-weight:600;padding:2px 0}
@@ -27,6 +27,22 @@ details input[type=number]{width:54px;font-size:14px;padding:3px}
 details button{font-size:14px;padding:8px 12px}
 #info{font-size:12px;line-height:1.45;font-variant-numeric:tabular-nums;white-space:pre-wrap;max-width:300px}
 #chart{width:220px;height:70px;display:block;margin-top:4px}
+button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1.3)}
+#bar button{min-width:44px;box-shadow:0 2px 0 #0006}#bar button.on{background:#c0392b}
+#hint{transition:opacity 1s}
+#hud{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:8px;display:flex;flex-direction:column;gap:4px;pointer-events:none;font:600 12px system-ui,Arial,sans-serif}
+.hc{background:var(--panel);border-radius:8px;padding:5px 8px;min-width:110px}
+.hb{height:6px;border-radius:3px;background:#0006;margin-top:4px;overflow:hidden}.hb i{display:block;height:100%;background:#d63031}
+#splash[hidden]{display:none}
+#splash{position:fixed;inset:0;background:radial-gradient(circle at 50% 40%,#3a4048,#1c1f23);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:10;text-align:center;padding:24px}
+#splash h1{margin:0;font:800 40px system-ui,Arial,sans-serif;letter-spacing:6px}
+#splash .tag{display:inline-block;background:#c0392b;color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;letter-spacing:2px;vertical-align:middle}
+#splash p{margin:0;opacity:.75;font-size:14px;line-height:1.6;max-width:300px}
+#splash #bPlay{font-size:18px;padding:14px 46px;background:#c0392b;color:#fff;border-radius:12px}
+#splash .sm{font-size:13px;padding:8px 12px}
+.ov{position:fixed;inset:0;background:#000a;backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:9}
+.ov[hidden]{display:none}.ov h2{margin:0 0 6px;font:800 26px system-ui,Arial,sans-serif;letter-spacing:3px}
+.ov button{min-width:220px;font-size:16px}
 </style>
 </head>
 <body>
@@ -73,7 +89,7 @@ details button{font-size:14px;padding:8px 12px}
   <div class="row"><button id="bBreakAll">Break all</button><button id="bHealAll">Heal all</button></div>
 </details>
 </div>
-<details id="dbg">
+<div hidden><details id="dbg">
   <summary>Debug</summary>
   <div class="row"><button id="pL">&#9664; Push</button><button id="pR">Push &#9654;</button></div>
   <label>Strength <input type="range" id="pS" min="0.1" max="3" step="0.1" value="1" style="width:110px;height:auto"></label>
@@ -85,16 +101,36 @@ details button{font-size:14px;padding:8px 12px}
   <label><input type="checkbox" id="oCom"> COM &amp; support</label>
   <label><input type="checkbox" id="oPD" checked> Pose (PD on)</label>
   <label><input type="checkbox" id="oSlow"> Slow-mo</label>
-</details>
+</details></div>
 </div>
 <div id="hint">1 finger: drag ragdoll or pan · 2 fingers: zoom</div>
 <div id="bar">
-  <button id="bSpawn">Spawn</button>
-  <button id="bDrop">Drop</button>
+  <button id="bSpawn">&#x2795; Spawn</button>
+  <button id="bDrop">&#x2B07;&#xFE0E; Drop</button>
   <button id="bFall">Fallen</button>
-  <button id="bReset">Reset</button>
+  <button id="bPause">Pause</button>
   <button id="bIn">+</button>
   <button id="bOut">&minus;</button>
+</div>
+<div id="hud"></div>
+<div id="pmenu" class="ov" hidden>
+  <h2>Paused</h2>
+  <button id="mResume">Resume</button>
+  <button id="bSlowB" class="tg">Slow motion: off</button>
+  <button id="mSound" class="tg">Sound: on</button>
+  <button id="mGore" class="tg">Blood &amp; gore: on</button>
+  <button id="bClean">Clean up blood</button>
+  <button id="bReset">Reset scene</button>
+  <button id="mMain">Main menu</button>
+</div>
+
+<div id="splash">
+  <h1>EQUILIBRIA</h1>
+  <div><span class="tag">ALPHA 0.1</span></div>
+  <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
+  <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
+  <button id="bPlay">Play</button>
+  <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sGore" class="tg sm">Blood &amp; gore: on</button></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">

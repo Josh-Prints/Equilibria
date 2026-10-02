@@ -209,6 +209,7 @@
     var rig=RS.buildRig(world,x,0,-(++group),o);
     if(kind==='drop'&&sc.vel)rig.parts.forEach(function(b){b.setLinearVelocity(Vec2(sc.vel.vx,sc.vel.vy));b.setAngularVelocity(sc.vel.w);});
     rigs.push(rig);liveBufs.push(RS.newBuf());
+    if(rigs.length>MAXR){var old=rigs.shift();liveBufs.shift();old.parts.forEach(function(b){world.destroyBody(b);});} // keep it fast on phones
   }
   function hit(p){
     for(var b=world.getBodyList();b;b=b.getNext()){
@@ -298,7 +299,41 @@
   document.getElementById('bSpawn').onclick=function(){spawn('stand');};
   document.getElementById('bDrop').onclick=function(){spawn('drop');};
   document.getElementById('bFall').onclick=function(){spawn('fallen');};
-  document.getElementById('bReset').onclick=init;
+  document.getElementById('bReset').onclick=function(){init();pauseMenu(false);};
+  var userPaused=false,MAXR=10;
+  function setOn(id,on){document.getElementById(id).classList.toggle('on',!!on);}
+  function $(id){return document.getElementById(id);}
+  function tgl(id){var c=$(id);c.checked=!c.checked;syncMenu();}
+  function syncMenu(){
+    $('bSlowB').textContent='Slow motion: '+(opt('oSlow')?'on':'off');
+    $('mSound').textContent=$('sSound').textContent='Sound: '+(opt('oSound')?'on':'off');
+    $('mGore').innerHTML=$('sGore').innerHTML='Blood &amp; gore: '+(opt('oGore')?'on':'off');
+    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),gore:opt('oGore')}));}catch(_){}
+    if(AC&&master)master.gain.value=opt('oSound')?0.9:0;
+  }
+  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;$('oGore').checked=so.gore;}}catch(_){}
+  function pauseMenu(on){userPaused=on;$('pmenu').hidden=!on;setOn('bPause',on);}
+  $('bPause').onclick=function(){pauseMenu(true);};
+  $('mResume').onclick=function(){pauseMenu(false);};
+  $('bSlowB').onclick=function(){tgl('oSlow');};
+  $('mSound').onclick=$('sSound').onclick=function(){tgl('oSound');audioInit();};
+  $('mGore').onclick=$('sGore').onclick=function(){tgl('oGore');};
+  $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);});pauseMenu(false);};
+  $('mMain').onclick=function(){pauseMenu(false);init();var sp=$('splash');sp.hidden=false;sp.style.opacity=1;};
+  $('bPlay').onclick=function(){var sp=$('splash');sp.style.transition='opacity .4s';sp.style.opacity=0;setTimeout(function(){sp.hidden=true;},400);audioInit();
+    var h=$('hint');h.style.opacity=0.7;setTimeout(function(){h.style.opacity=0;},7000);};
+  syncMenu();
+  // HUD: blood and state of each ragdoll (top right)
+  function hud(){
+    var h=document.getElementById('hud'),html='';
+    rigs.slice(-4).forEach(function(r,i){
+      var bl=r.blood==null?1:r.blood,I=r.inj,nb=0,ng=0;
+      if(I)for(var k=0;k<RS.NJ;k++){if(I.broken[k])nb++;if(I.gone[k]&&(k%3===0||!I.gone[k-1]))ng++;}
+      var st=r.dead?'Dead':r.koT>0?'Knocked out':r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
+      html+='<div class="hc">#'+(rigs.indexOf(r)+1)+' '+st+(nb?' · '+nb+' broken':'')+(ng?' · '+ng+' lost':'')+'<div class="hb"><i style="width:'+Math.round(bl*100)+'%"></i></div></div>';
+    });
+    if(h.innerHTML!==html)h.innerHTML=html;
+  }
   document.getElementById('bIn').onclick=function(){setZoom(cam.z*1.4,W/2,H/2);};
   document.getElementById('bOut').onclick=function(){setZoom(cam.z/1.4,W/2,H/2);};
   function push(dir){
@@ -507,12 +542,13 @@
     drawGround(gy);
     drawFlesh(true);if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;}drawFlesh(false);if(opt('oBox'))drawBodies(false);
     drawBlood();
-    if(opt('oNN')&&RS.hasDet()){ // what the network thinks is happening, above each head
+    { // status above each head (and, with Show what it senses, what the network thinks is happening)
       ctx.font='600 12px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
       rigs.forEach(function(r){
         var p=r.dp,b=0;for(var j=1;j<p.length;j++)if(p[j]>p[b])b=j;var gu=r.gu&&r.gu.ph>=0,cw=r.cowering,dd=r.dead||(r.ko?'knocked out':'');
         var hp=toScreen(r.parts[0].getPosition());
-        ctx.globalAlpha=gu||cw||dd?1:0.5+0.5*p[b];ctx.fillText(dd?(r.dead?'dead':dd):cw?'cowering':gu?'getting up':RS.DCLS[b]+' '+Math.round(p[b]*100)+'%',hp.x,hp.y-0.2*cam.z);ctx.globalAlpha=1;
+        var lab=dd?(r.dead?'dead':dd):cw?'in pain':gu?'getting up':'';
+        if(lab){ctx.globalAlpha=gu||cw||dd?1:0.5+0.5*p[b];ctx.fillText(lab,hp.x,hp.y-0.2*cam.z);ctx.globalAlpha=1;}
       });
     }
     if(opt('oSkel')){
@@ -574,8 +610,8 @@
       for(var k=0;k<RS.NJ;k++){
         if(!I.broken[k]&&!(I.gone[k]&&(k===3||k===6||k===9||k===12||!I.gone[k-1])))continue;
         var c=r.ctrls[k],a=toScreen(c.a.getWorldPoint(c.j.getLocalAnchorA()));
-        ctx.globalAlpha=k>=3&&k<9?0.5:1;ctx.beginPath();ctx.arc(a.x,a.y,I.gone[k]?6:4,0,Math.PI*2);ctx.fill();
-        if(I.gone[k]){var b=toScreen(c.b.getWorldPoint(c.j.getLocalAnchorB()));ctx.beginPath();ctx.arc(b.x,b.y,5,0,Math.PI*2);ctx.fill();}
+        ctx.globalAlpha=k>=3&&k<9?0.5:1;ctx.beginPath();ctx.arc(a.x,a.y,Math.max(1.5,(I.gone[k]?0.05:0.035)*cam.z),0,Math.PI*2);ctx.fill();
+        if(I.gone[k]){var b=toScreen(c.b.getWorldPoint(c.j.getLocalAnchorB()));ctx.beginPath();ctx.arc(b.x,b.y,Math.max(1.5,0.045*cam.z),0,Math.PI*2);ctx.fill();}
       }
     });
     ctx.globalAlpha=1;
@@ -584,7 +620,7 @@
   var last=performance.now(),acc=0,injN=0;
   function frame(t){
     var dt=Math.min((t-last)/1000,0.05);last=t;
-    var paused=training&&pool.mode!=='workers'; // main-thread training: no time left for the live view
+    var paused=userPaused||training&&pool.mode!=='workers'; // main-thread training: no time left for the live view
     if(!paused){
       if(opt('oSlow'))dt*=0.25;
       acc+=dt;
@@ -598,7 +634,7 @@
       }
     }
     if(!paused)goreStep(Math.min(dt,0.05));
-    draw();drawInjuries();if(++injN%10===0)injSync();requestAnimationFrame(frame);
+    draw();drawInjuries();if(++injN%10===0){injSync();hud();}requestAnimationFrame(frame);
   }
   window.EQ={rigs:function(){return rigs;}}; // for poking at it from the console
   init();updateInfo();requestAnimationFrame(frame);

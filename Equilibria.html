@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Equilibria</title>
+<title>Equilibria (alpha)</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2c3035">
 <style>
-:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f2f2f2;--fg:#111;--btn:#ddd;--panel:#ffffffd9}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111;--fg:#eee;--btn:#333;--panel:#222d}}
-:root[data-theme="dark"]{--bg:#111;--fg:#eee;--btn:#333;--panel:#222d}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#2c3035;--fg:#e6e9ed;--btn:#3d434b;--panel:#23272cdd}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--fg);font-family:system-ui,Arial,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 canvas#c{display:block;width:100%;height:100%;touch-action:none}
 #bar{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;justify-content:center;flex-wrap:wrap;padding:0 8px}
 button{font:600 15px system-ui,Arial,sans-serif;padding:11px 14px;border:0;border-radius:10px;background:var(--btn);color:var(--fg)}
-#hint{position:fixed;bottom:calc(112px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;font-size:12px;opacity:.7;color:#dfe3e8;pointer-events:none;padding:0 8px}
+#hint{position:fixed;bottom:calc(112px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;font-size:12px;opacity:0;color:#dfe3e8;pointer-events:none;padding:0 8px}
 #panels{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));left:8px;display:flex;flex-direction:column;gap:6px;max-height:calc(100% - 150px);overflow:auto;max-width:calc(100% - 16px)}
 details{background:var(--panel);border-radius:10px;padding:6px 10px;font-size:14px;backdrop-filter:blur(6px)}
 summary{font-weight:600;padding:2px 0}
@@ -24,6 +24,22 @@ details input[type=number]{width:54px;font-size:14px;padding:3px}
 details button{font-size:14px;padding:8px 12px}
 #info{font-size:12px;line-height:1.45;font-variant-numeric:tabular-nums;white-space:pre-wrap;max-width:300px}
 #chart{width:220px;height:70px;display:block;margin-top:4px}
+button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1.3)}
+#bar button{min-width:44px;box-shadow:0 2px 0 #0006}#bar button.on{background:#c0392b}
+#hint{transition:opacity 1s}
+#hud{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:8px;display:flex;flex-direction:column;gap:4px;pointer-events:none;font:600 12px system-ui,Arial,sans-serif}
+.hc{background:var(--panel);border-radius:8px;padding:5px 8px;min-width:110px}
+.hb{height:6px;border-radius:3px;background:#0006;margin-top:4px;overflow:hidden}.hb i{display:block;height:100%;background:#d63031}
+#splash[hidden]{display:none}
+#splash{position:fixed;inset:0;background:radial-gradient(circle at 50% 40%,#3a4048,#1c1f23);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:10;text-align:center;padding:24px}
+#splash h1{margin:0;font:800 40px system-ui,Arial,sans-serif;letter-spacing:6px}
+#splash .tag{display:inline-block;background:#c0392b;color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;letter-spacing:2px;vertical-align:middle}
+#splash p{margin:0;opacity:.75;font-size:14px;line-height:1.6;max-width:300px}
+#splash #bPlay{font-size:18px;padding:14px 46px;background:#c0392b;color:#fff;border-radius:12px}
+#splash .sm{font-size:13px;padding:8px 12px}
+.ov{position:fixed;inset:0;background:#000a;backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:9}
+.ov[hidden]{display:none}.ov h2{margin:0 0 6px;font:800 26px system-ui,Arial,sans-serif;letter-spacing:3px}
+.ov button{min-width:220px;font-size:16px}
 </style>
 </head>
 <body>
@@ -70,7 +86,7 @@ details button{font-size:14px;padding:8px 12px}
   <div class="row"><button id="bBreakAll">Break all</button><button id="bHealAll">Heal all</button></div>
 </details>
 </div>
-<details id="dbg">
+<div hidden><details id="dbg">
   <summary>Debug</summary>
   <div class="row"><button id="pL">&#9664; Push</button><button id="pR">Push &#9654;</button></div>
   <label>Strength <input type="range" id="pS" min="0.1" max="3" step="0.1" value="1" style="width:110px;height:auto"></label>
@@ -82,16 +98,36 @@ details button{font-size:14px;padding:8px 12px}
   <label><input type="checkbox" id="oCom"> COM &amp; support</label>
   <label><input type="checkbox" id="oPD" checked> Pose (PD on)</label>
   <label><input type="checkbox" id="oSlow"> Slow-mo</label>
-</details>
+</details></div>
 </div>
 <div id="hint">1 finger: drag ragdoll or pan · 2 fingers: zoom</div>
 <div id="bar">
-  <button id="bSpawn">Spawn</button>
-  <button id="bDrop">Drop</button>
+  <button id="bSpawn">&#x2795; Spawn</button>
+  <button id="bDrop">&#x2B07;&#xFE0E; Drop</button>
   <button id="bFall">Fallen</button>
-  <button id="bReset">Reset</button>
+  <button id="bPause">Pause</button>
   <button id="bIn">+</button>
   <button id="bOut">&minus;</button>
+</div>
+<div id="hud"></div>
+<div id="pmenu" class="ov" hidden>
+  <h2>Paused</h2>
+  <button id="mResume">Resume</button>
+  <button id="bSlowB" class="tg">Slow motion: off</button>
+  <button id="mSound" class="tg">Sound: on</button>
+  <button id="mGore" class="tg">Blood &amp; gore: on</button>
+  <button id="bClean">Clean up blood</button>
+  <button id="bReset">Reset scene</button>
+  <button id="mMain">Main menu</button>
+</div>
+
+<div id="splash">
+  <h1>EQUILIBRIA</h1>
+  <div><span class="tag">ALPHA 0.1</span></div>
+  <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
+  <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
+  <button id="bPlay">Play</button>
+  <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sGore" class="tg sm">Blood &amp; gore: on</button></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1179,6 +1215,7 @@ var RS=(function(){
     var rig=RS.buildRig(world,x,0,-(++group),o);
     if(kind==='drop'&&sc.vel)rig.parts.forEach(function(b){b.setLinearVelocity(Vec2(sc.vel.vx,sc.vel.vy));b.setAngularVelocity(sc.vel.w);});
     rigs.push(rig);liveBufs.push(RS.newBuf());
+    if(rigs.length>MAXR){var old=rigs.shift();liveBufs.shift();old.parts.forEach(function(b){world.destroyBody(b);});} // keep it fast on phones
   }
   function hit(p){
     for(var b=world.getBodyList();b;b=b.getNext()){
@@ -1268,7 +1305,41 @@ var RS=(function(){
   document.getElementById('bSpawn').onclick=function(){spawn('stand');};
   document.getElementById('bDrop').onclick=function(){spawn('drop');};
   document.getElementById('bFall').onclick=function(){spawn('fallen');};
-  document.getElementById('bReset').onclick=init;
+  document.getElementById('bReset').onclick=function(){init();pauseMenu(false);};
+  var userPaused=false,MAXR=10;
+  function setOn(id,on){document.getElementById(id).classList.toggle('on',!!on);}
+  function $(id){return document.getElementById(id);}
+  function tgl(id){var c=$(id);c.checked=!c.checked;syncMenu();}
+  function syncMenu(){
+    $('bSlowB').textContent='Slow motion: '+(opt('oSlow')?'on':'off');
+    $('mSound').textContent=$('sSound').textContent='Sound: '+(opt('oSound')?'on':'off');
+    $('mGore').innerHTML=$('sGore').innerHTML='Blood &amp; gore: '+(opt('oGore')?'on':'off');
+    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),gore:opt('oGore')}));}catch(_){}
+    if(AC&&master)master.gain.value=opt('oSound')?0.9:0;
+  }
+  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;$('oGore').checked=so.gore;}}catch(_){}
+  function pauseMenu(on){userPaused=on;$('pmenu').hidden=!on;setOn('bPause',on);}
+  $('bPause').onclick=function(){pauseMenu(true);};
+  $('mResume').onclick=function(){pauseMenu(false);};
+  $('bSlowB').onclick=function(){tgl('oSlow');};
+  $('mSound').onclick=$('sSound').onclick=function(){tgl('oSound');audioInit();};
+  $('mGore').onclick=$('sGore').onclick=function(){tgl('oGore');};
+  $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);});pauseMenu(false);};
+  $('mMain').onclick=function(){pauseMenu(false);init();var sp=$('splash');sp.hidden=false;sp.style.opacity=1;};
+  $('bPlay').onclick=function(){var sp=$('splash');sp.style.transition='opacity .4s';sp.style.opacity=0;setTimeout(function(){sp.hidden=true;},400);audioInit();
+    var h=$('hint');h.style.opacity=0.7;setTimeout(function(){h.style.opacity=0;},7000);};
+  syncMenu();
+  // HUD: blood and state of each ragdoll (top right)
+  function hud(){
+    var h=document.getElementById('hud'),html='';
+    rigs.slice(-4).forEach(function(r,i){
+      var bl=r.blood==null?1:r.blood,I=r.inj,nb=0,ng=0;
+      if(I)for(var k=0;k<RS.NJ;k++){if(I.broken[k])nb++;if(I.gone[k]&&(k%3===0||!I.gone[k-1]))ng++;}
+      var st=r.dead?'Dead':r.koT>0?'Knocked out':r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
+      html+='<div class="hc">#'+(rigs.indexOf(r)+1)+' '+st+(nb?' · '+nb+' broken':'')+(ng?' · '+ng+' lost':'')+'<div class="hb"><i style="width:'+Math.round(bl*100)+'%"></i></div></div>';
+    });
+    if(h.innerHTML!==html)h.innerHTML=html;
+  }
   document.getElementById('bIn').onclick=function(){setZoom(cam.z*1.4,W/2,H/2);};
   document.getElementById('bOut').onclick=function(){setZoom(cam.z/1.4,W/2,H/2);};
   function push(dir){
@@ -1477,12 +1548,13 @@ var RS=(function(){
     drawGround(gy);
     drawFlesh(true);if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;}drawFlesh(false);if(opt('oBox'))drawBodies(false);
     drawBlood();
-    if(opt('oNN')&&RS.hasDet()){ // what the network thinks is happening, above each head
+    { // status above each head (and, with Show what it senses, what the network thinks is happening)
       ctx.font='600 12px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
       rigs.forEach(function(r){
         var p=r.dp,b=0;for(var j=1;j<p.length;j++)if(p[j]>p[b])b=j;var gu=r.gu&&r.gu.ph>=0,cw=r.cowering,dd=r.dead||(r.ko?'knocked out':'');
         var hp=toScreen(r.parts[0].getPosition());
-        ctx.globalAlpha=gu||cw||dd?1:0.5+0.5*p[b];ctx.fillText(dd?(r.dead?'dead':dd):cw?'cowering':gu?'getting up':RS.DCLS[b]+' '+Math.round(p[b]*100)+'%',hp.x,hp.y-0.2*cam.z);ctx.globalAlpha=1;
+        var lab=dd?(r.dead?'dead':dd):cw?'in pain':gu?'getting up':'';
+        if(lab){ctx.globalAlpha=gu||cw||dd?1:0.5+0.5*p[b];ctx.fillText(lab,hp.x,hp.y-0.2*cam.z);ctx.globalAlpha=1;}
       });
     }
     if(opt('oSkel')){
@@ -1544,8 +1616,8 @@ var RS=(function(){
       for(var k=0;k<RS.NJ;k++){
         if(!I.broken[k]&&!(I.gone[k]&&(k===3||k===6||k===9||k===12||!I.gone[k-1])))continue;
         var c=r.ctrls[k],a=toScreen(c.a.getWorldPoint(c.j.getLocalAnchorA()));
-        ctx.globalAlpha=k>=3&&k<9?0.5:1;ctx.beginPath();ctx.arc(a.x,a.y,I.gone[k]?6:4,0,Math.PI*2);ctx.fill();
-        if(I.gone[k]){var b=toScreen(c.b.getWorldPoint(c.j.getLocalAnchorB()));ctx.beginPath();ctx.arc(b.x,b.y,5,0,Math.PI*2);ctx.fill();}
+        ctx.globalAlpha=k>=3&&k<9?0.5:1;ctx.beginPath();ctx.arc(a.x,a.y,Math.max(1.5,(I.gone[k]?0.05:0.035)*cam.z),0,Math.PI*2);ctx.fill();
+        if(I.gone[k]){var b=toScreen(c.b.getWorldPoint(c.j.getLocalAnchorB()));ctx.beginPath();ctx.arc(b.x,b.y,Math.max(1.5,0.045*cam.z),0,Math.PI*2);ctx.fill();}
       }
     });
     ctx.globalAlpha=1;
@@ -1554,7 +1626,7 @@ var RS=(function(){
   var last=performance.now(),acc=0,injN=0;
   function frame(t){
     var dt=Math.min((t-last)/1000,0.05);last=t;
-    var paused=training&&pool.mode!=='workers'; // main-thread training: no time left for the live view
+    var paused=userPaused||training&&pool.mode!=='workers'; // main-thread training: no time left for the live view
     if(!paused){
       if(opt('oSlow'))dt*=0.25;
       acc+=dt;
@@ -1568,7 +1640,7 @@ var RS=(function(){
       }
     }
     if(!paused)goreStep(Math.min(dt,0.05));
-    draw();drawInjuries();if(++injN%10===0)injSync();requestAnimationFrame(frame);
+    draw();drawInjuries();if(++injN%10===0){injSync();hud();}requestAnimationFrame(frame);
   }
   window.EQ={rigs:function(){return rigs;}}; // for poking at it from the console
   init();updateInfo();requestAnimationFrame(frame);
