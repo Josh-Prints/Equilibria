@@ -287,3 +287,10 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 ## v0.2.17 — Leg shots keep them down
 - Thigh and shin hits pass `mortal` to `RS.shot`, so the fall reaction never ends: it stays down clutching the leg.
 - Thigh holes bleed weight 2.2 (femoral artery): out ~22 s, dead later. Shin holes stay at 1. Arm shots still get back up after ~8 s.
+
+## v0.2.18 — Sledgehammer and knife
+- Spawn menu: Sledgehammer and Knife. Both are plain dynamic bodies you drag and swing (no tap action; only guns fire).
+- Hits: `world.on('begin-contact')` queues item-vs-person contacts (`meleeContact`), handled right after each step (`meleeStep`), 250 ms cooldown per item and part. Realism scales thresholds (Glass 0.6, Default 1, Realistic 1.25).
+- Hammer (normal speed of the head; the handle counts half): head >6 m/s kills (crushed), >3.5 knocks out. Limbs (thigh 1.5x, shin 1.15x, hand/foot 0.8–0.9x): >3 breaks the bone, >8 crushes it (shatter with full gore), >13 rips it off. Torso >4 knocks them down; >7 breaks the spine, bleeds inside and keeps them down.
+- Knife (blade only, >2 m/s): `wound()` with `cut` (slit-shaped wound drawn in `drawHoles`; a slash is longer than a stab), bleeding 0.7x a bullet, same reactions as gunshots. A chop >7 m/s on a hand, forearm, foot or shin cuts it off (needs sever gore).
+- `fire()`'s wound logic moved into `wound(r,k,hp,d,o)` shared by the gun and knife.
