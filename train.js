@@ -12,7 +12,7 @@ var RS_DETW={"mu":[-0.0067241,-0.00027025,0.0024076,0.00022175,0.0021074,-0.0000
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -132,6 +132,7 @@ var RS=(function(){
     var cs=r.ctrls,st=r.stiff;
     for(var i=0;i<cs.length;i++){
       var c=cs[i],ks=st[i];
+      if(r.inj&&r.inj.gone[i])continue; // torn off
       var t=c.kp*ks*(c.target-c.j.getJointAngle())-c.kd*Math.sqrt(ks)*c.j.getJointSpeed();
       var mx=c.max*ks;
       if(t>mx)t=mx;else if(t<-mx)t=-mx;
@@ -540,13 +541,15 @@ var RS=(function(){
       var v=ps[k].getLinearVelocity(),d=0;
       if(live&&onGround(ps[k]))d=Math.hypot(v.x-rig.cpv[2*k],v.y-rig.cpv[2*k+1]);
       rig.cpv[2*k]=v.x;rig.cpv[2*k+1]=v.y;
+      if(k===0)rig.impH=d;
       if(k===0||k===1||k===3)it=Math.max(it,d);
       id=Math.max(id,k===0?1.4*d:d);
     }
     rig.impT=it;rig.impD=id;
   }
   function cower(rig,tt,dt){
-    var imp=rig.impT||0,k;
+    var imp=FLAGS.cower?rig.impT||0:0,k;
+    if(hurt(rig)){if(!(rig.cowT>0))rig.cowA=0;rig.cowT=Math.max(rig.cowT||0,1);rig.gu.ph=-1;} // a broken bone: stays curled up
     if(imp>FLAGS.cowerImp&&(rig.cowT||0)<0.5){rig.cowT=Math.min(3.5,1.5+0.6*(imp-FLAGS.cowerImp));rig.cowA=0;rig.gu.ph=-1;}
     if(!(rig.cowT>0))return false;
     rig.cowT-=dt;rig.cowA=(rig.cowA||0)+dt;
@@ -563,6 +566,54 @@ var RS=(function(){
   function goLimp(rig,out){
     for(var k=0;k<NJ;k++){rig.rs[k]=rig.stiff[k]=0.003;var a=rig.ctrls[k].j.getJointAngle();rig.tgt[k]=a;rig.ctrls[k].target=a;}
     rig.gu.ph=-1;rig.cowering=false;return out;
+  }
+
+  // INJURIES (FLAGS.inj: bones break, head knocks cause knockouts; FLAGS.sever: limbs can be torn off).
+  // Load on each joint = its constraint force smoothed over ~0.1 s (single ticks are too spiky to use). A bone breaks
+  // when that load passes BRK for the joint (arms are weakest); a broken joint loses its limits (it can spin all the
+  // way round) and it and everything beyond it go limp. Broken neck = dead. Broken back = legs paralysed.
+  // Any broken bone makes it cower for as long as it is conscious. A limb comes off when the smoothed force pulling
+  // the joint apart (not pushing it together) passes SEV: only hard pulls (dragging) do that, never falls or pushes.
+  // Measured (smoothed load): standing <10 N, big shoves <45, 3 m drop on the feet 60-90, 8 m drop 110-170 (legs/back),
+  // dragging a hand/foot/head away 120-130. Pulling apart: everything <35 except dragging (115-130).
+  // Head hits (velocity change on the ground) above koImp knock it out for a few seconds: a big shove onto its back
+  // gives ~4.5, a 3 m head-first drop ~6.6. Dying still uses dieImp (where head hits count 1.4x).
+  var BRK=[100,100,100, 60,60,60,105,100,80, 60,60,60,105,100,80],SEV=95;
+  var JNAMES=['neck','upper back','lower back','far shoulder','far elbow','far wrist','far hip','far knee','far ankle','near shoulder','near elbow','near wrist','near hip','near knee','near ankle'];
+  var KIDS=[[0],[1],[2],[3,4,5],[4,5],[5],[6,7,8],[7,8],[8],[9,10,11],[10,11],[11],[12,13,14],[13,14],[14]];
+  function injOf(rig){return rig.inj||(rig.inj={load:new Float64Array(NJ),pull:new Float64Array(NJ),broken:new Uint8Array(NJ),gone:new Uint8Array(NJ),t:0});}
+  function hurt(rig){var I=rig.inj;if(!I)return false;for(var k=0;k<NJ;k++)if(I.broken[k]||I.gone[k])return true;return false;}
+  function breakBone(rig,k,on){
+    var I=injOf(rig);if(I.gone[k]||!!I.broken[k]===!!on)return;
+    I.broken[k]=on?1:0;
+    if(on){rig.ctrls[k].j.enableLimit(false);if(k===0)rig.dead=true;}
+    else rig.age=Math.min(rig.age,0.3); // healed: the limit comes back once the joint is inside its range again (below)
+  }
+  function sever(rig,k){
+    var I=injOf(rig);if(I.gone[k]||k<3)return; // limbs only
+    var j=rig.ctrls[k].j;j.getBodyA().getWorld().destroyJoint(j);
+    KIDS[k].forEach(function(q){I.gone[q]=1;I.broken[q]=0;});
+  }
+  function injuries(rig,dt){
+    var I=injOf(rig),k;I.t+=dt;
+    for(k=0;k<NJ;k++){
+      if(I.gone[k])continue;
+      var c=rig.ctrls[k],j=c.j,F=j.getReactionForce(1/DT),an=j.getAnchorB(),cb=c.b.getWorldCenter(),dx=cb.x-an.x,dy=cb.y-an.y,dl=Math.hypot(dx,dy)||1;
+      I.load[k]+=(Math.hypot(F.x,F.y)-I.load[k])*0.08;
+      I.pull[k]+=(Math.max(0,-(F.x*dx+F.y*dy)/dl)-I.pull[k])*0.08;
+      if(I.t>0.2){ // not during the settle after spawning
+        if(FLAGS.inj&&!I.broken[k]&&I.load[k]>BRK[k])breakBone(rig,k,true);
+        if(FLAGS.sever&&k>=3&&I.pull[k]>SEV){sever(rig,k);continue;}
+      }
+      if(!I.broken[k]&&!j.isLimitEnabled()){var a=j.getJointAngle();if(a>=j.getLowerLimit()&&a<=j.getUpperLimit())j.enableLimit(true);}
+    }
+    if(FLAGS.inj&&(rig.impH||0)>FLAGS.koImp&&!rig.dead)rig.koT=Math.max(rig.koT||0,3+2*(rig.impH-FLAGS.koImp));
+  }
+  function limp1(rig,q){rig.rs[q]=rig.stiff[q]=0.003;var a=rig.ctrls[q].j.getJointAngle();rig.tgt[q]=a;rig.ctrls[q].target=a;}
+  function injLimp(rig){ // broken or severed joints (and the limb beyond them) can't be moved
+    var I=rig.inj;if(!I)return;
+    for(var k=0;k<NJ;k++)if(I.broken[k]||I.gone[k])KIDS[k].forEach(function(q){limp1(rig,q);});
+    if(I.broken[1]||I.broken[2])[6,7,8,12,13,14].forEach(function(q){limp1(rig,q);});
   }
 
   // PROTECT HEAD (FLAGS.protect): while falling toward the ground (detector says falling, or it's in the air), with the
@@ -630,10 +681,13 @@ var RS=(function(){
       else if(k===0)t+=neck;else if(k===3||k===9)t+=sh;else if(k===4||k===10)t+=el;
       tt[k]=t;
     }
-    if(rf&&(FLAGS.cower||FLAGS.die))impacts(rig);
+    if(rf&&(FLAGS.cower||FLAGS.die||FLAGS.inj))impacts(rig);
+    if(FLAGS.inj||FLAGS.sever||rig.inj)injuries(rig,dt);
     if(rf&&FLAGS.die&&rig.impD>FLAGS.dieImp)rig.dead=true;
     if(rig.dead)return goLimp(rig,out);
-    var cowering=rf&&FLAGS.cower&&cower(rig,tt,dt);rig.cowering=!!cowering;
+    if(rig.koT>0){rig.koT-=dt;if(rig.koT<=0)rig.age=0;goLimp(rig,out);rig.ko=true;return out;} // knocked out: limp until it comes round
+    rig.ko=false;
+    var cowering=rf&&(FLAGS.cower||hurt(rig))&&cower(rig,tt,dt);rig.cowering=!!cowering;
     var gettingUp=!cowering&&rf&&FLAGS.getup&&getUp(rig,tt,dt);
     guLimits(rig,!!gettingUp);
     rig.b2ok=!cowering&&!gettingUp&&rf&&FLAGS.bal2?bal2(rig,tt,out,ca,dt):false;
@@ -648,6 +702,7 @@ var RS=(function(){
       rig.tgt[k]+=(tt[k]-rig.tgt[k])*al;
       rig.ctrls[k].target=rig.tgt[k];
     }
+    injLimp(rig);
     return out;
   }
 
@@ -782,7 +837,7 @@ var RS=(function(){
     return {mean:sum/all.length,best:best};
   }
 
-  return {DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},GU:GU,FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
+  return {JNAMES:JNAMES,breakBone:breakBone,sever:sever,hurt:hurt,DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},GU:GU,FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
     esNoise:esNoise,esStep:esStep,migrate:migrate,runEpisode:runEpisode,evalCandidate:evalCandidate,sampleScenario:sampleScenario,fk:fk,
     NP:NP,NI:NI,NO:NO,NJ:NJ,DT:DT,SUB:SUB,POLICY_HZ:POLICY_HZ,VEL_IT:VEL_IT,POS_IT:POS_IT,JT:JT,ORDER:ORDER,CASES:CASES,wrap:wrap};
 })();

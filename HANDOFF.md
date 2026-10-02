@@ -153,3 +153,11 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 ## Dying and head protection (FLAGS.die / FLAGS.protect, tick boxes "Can die from really hard hits", "Protect head when falling")
 - `impacts()` measures, each tick, the velocity change of every part that is touching the ground (head counts 1.4x). Above `dieImp` (12) it dies: all joints go limp for good (`goLimp`), label "dead". Measured: flat drop from 5 m, head-first from 5 m, feet-first from 8 m die; a max shove, 3 m flat drop or 4 m feet-first don't.
 - `protectHead()`: while falling with the head coming down, forearms come up (guard in front of the face when falling forward, hands behind the head otherwise), chin tucked, held 0.35 s after.
+
+## Injuries (FLAGS.inj, FLAGS.sever; page panel "Injuries")
+- Load on each joint = constraint force smoothed over ~0.1 s (single ticks are too spiky). A bone breaks when that load passes `BRK[k]` (arms 60 N, ankles 80, knees 100, hips 105, spine/neck 100). Measured: standing <10, big shoves <45, 3 m drop on feet 60-90 (breaks an ankle), 8 m drop 110-170.
+- Broken joint: limits off (spins freely) and it plus everything beyond it goes limp (`injLimp`, run after all reflexes). Broken neck = dead. Broken back = legs paralysed. Any broken or missing limb keeps it cowering while conscious. Healing re-enables the limit once the joint is back inside its range.
+- Head hit (ground velocity change) above `koImp` 5.5 knocks it out for 3+ s (limp, then cowers/gets up). Dying still uses `dieImp`.
+- Severing: smoothed force pulling the joint apart (not compression) above `SEV` 95 N destroys the joint. Only dragging gets there (115-130); falls and pushes stay under 35. Limbs only. Reset is the only way back.
+- Panel: tick boxes per bone (break/heal), Knocked out, Dead, Break all (everything but the neck), Heal all. API: `RS.breakBone(rig,k,on)`, `RS.sever(rig,k)`.
+- Survival with injuries on is unchanged (push 34/40, drop 22/40).

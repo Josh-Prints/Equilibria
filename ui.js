@@ -338,9 +338,9 @@
     if(opt('oNN')&&RS.hasDet()){ // what the network thinks is happening, above each head
       ctx.font='600 12px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
       rigs.forEach(function(r){
-        var p=r.dp,b=0;for(var j=1;j<p.length;j++)if(p[j]>p[b])b=j;var gu=r.gu&&r.gu.ph>=0,cw=r.cowering,dd=r.dead;
+        var p=r.dp,b=0;for(var j=1;j<p.length;j++)if(p[j]>p[b])b=j;var gu=r.gu&&r.gu.ph>=0,cw=r.cowering,dd=r.dead||(r.ko?'knocked out':'');
         var hp=toScreen(r.parts[0].getPosition());
-        ctx.globalAlpha=gu||cw||dd?1:0.5+0.5*p[b];ctx.fillText(dd?'dead':cw?'cowering':gu?'getting up':RS.DCLS[b]+' '+Math.round(p[b]*100)+'%',hp.x,hp.y-0.2*cam.z);ctx.globalAlpha=1;
+        ctx.globalAlpha=gu||cw||dd?1:0.5+0.5*p[b];ctx.fillText(dd?(r.dead?'dead':dd):cw?'cowering':gu?'getting up':RS.DCLS[b]+' '+Math.round(p[b]*100)+'%',hp.x,hp.y-0.2*cam.z);ctx.globalAlpha=1;
       });
     }
     if(opt('oSkel')){
@@ -378,7 +378,38 @@
     }
   }
 
-  var last=performance.now(),acc=0;
+  // INJURIES panel: tick boxes show the state of the rigs (any rig) and change it for all of them
+  function injSync(){
+    var k,b,g,ko=false,dead=false;
+    for(k=0;k<RS.NJ;k++){
+      b=false;g=rigs.length>0;
+      rigs.forEach(function(r){var I=r.inj;if(I&&I.broken[k])b=true;if(!(I&&I.gone[k]))g=false;});
+      var e=document.getElementById('iB'+k);e.checked=b;e.disabled=g;e.parentNode.style.opacity=g?0.4:1;
+    }
+    rigs.forEach(function(r){if(r.koT>0)ko=true;if(r.dead)dead=true;});
+    document.getElementById('iKO').checked=ko;document.getElementById('iDead').checked=dead;
+  }
+  function setBone(k,on){rigs.forEach(function(r){RS.breakBone(r,k,on);if(k===0&&!on)r.dead=false;});}
+  for(var bi=0;bi<RS.NJ;bi++)(function(k){document.getElementById('iB'+k).onchange=function(){setBone(k,this.checked);injSync();};})(bi);
+  document.getElementById('iKO').onchange=function(){var on=this.checked;rigs.forEach(function(r){r.koT=on?1e9:0;if(!on)r.age=0;});};
+  document.getElementById('iDead').onchange=function(){var on=this.checked;rigs.forEach(function(r){r.dead=on;if(!on){RS.breakBone(r,0,false);r.koT=0;r.age=0;r.gu.ph=-1;}});};
+  document.getElementById('bBreakAll').onclick=function(){for(var k=1;k<RS.NJ;k++)setBone(k,true);injSync();}; // not the neck: that kills it
+  document.getElementById('bHealAll').onclick=function(){for(var k=0;k<RS.NJ;k++)setBone(k,false);injSync();};
+  function drawInjuries(){ // red dot on broken joints, red stump where a limb came off
+    ctx.fillStyle='#e03131';
+    rigs.forEach(function(r){
+      var I=r.inj;if(!I)return;
+      for(var k=0;k<RS.NJ;k++){
+        if(!I.broken[k]&&!(I.gone[k]&&(k===3||k===6||k===9||k===12||!I.gone[k-1])))continue;
+        var c=r.ctrls[k],a=toScreen(c.a.getWorldPoint(c.j.getLocalAnchorA()));
+        ctx.globalAlpha=k>=3&&k<9?0.5:1;ctx.beginPath();ctx.arc(a.x,a.y,I.gone[k]?6:4,0,Math.PI*2);ctx.fill();
+        if(I.gone[k]){var b=toScreen(c.b.getWorldPoint(c.j.getLocalAnchorB()));ctx.beginPath();ctx.arc(b.x,b.y,5,0,Math.PI*2);ctx.fill();}
+      }
+    });
+    ctx.globalAlpha=1;
+  }
+
+  var last=performance.now(),acc=0,injN=0;
   function frame(t){
     var dt=Math.min((t-last)/1000,0.05);last=t;
     var paused=training&&pool.mode!=='workers'; // main-thread training: no time left for the live view
@@ -387,14 +418,14 @@
       acc+=dt;
       var use=opt('oUse'),pd=opt('oPD'),reflex=opt('oReflex'),i;
       RS.FLAGS.air=RS.FLAGS.land=RS.FLAGS.fall=opt('oFall')?1:0;
-      RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;RS.FLAGS.cower=opt('oCower')?1:0;RS.FLAGS.die=opt('oDie')?1:0;RS.FLAGS.protect=opt('oProtect')?1:0;
+      RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;RS.FLAGS.cower=opt('oCower')?1:0;RS.FLAGS.die=opt('oDie')?1:0;RS.FLAGS.protect=opt('oProtect')?1:0;RS.FLAGS.inj=opt('oInj')?1:0;RS.FLAGS.sever=opt('oSever')?1:0;
       while(acc>=DT){
         if((use||reflex)&&stepCount%SUB===0)for(i=0;i<rigs.length;i++)RS.act(rigs[i],use?ES.theta:ZERO_TH,liveBufs[i],liveRng,{delay:1,noise:0.005,reflex:reflex}); // reflexes run even when the policy is off (untrained = zero weights)
         if(pd)for(i=0;i<rigs.length;i++)RS.pdRig(rigs[i]);
         applyDrag();world.step(DT,RS.VEL_IT,RS.POS_IT);acc-=DT;stepCount++;
       }
     }
-    draw();requestAnimationFrame(frame);
+    draw();drawInjuries();if(++injN%10===0)injSync();requestAnimationFrame(frame);
   }
   init();updateInfo();requestAnimationFrame(frame);
 })();
