@@ -15,7 +15,8 @@ async function main(){
   const SIGMA=num('SIGMA',0.01),LR=num('LR',0.004),EVAL_EVERY=Math.round(num('EVAL_EVERY',20)),NP=RS.NP;
   const MODE=env.MODE||'full';                      // full = train every weight, out = output layer only
   const NW=Math.max(1,Math.round(num('WORKERS',os.cpus().length)));
-  const FLAGS={step:1,air:1,land:1,fall:1};         // all reflexes on, like the page default
+  const FLAGS={step:1,air:1,land:1,fall:1,           // all reflexes on, like the page default
+    smooth:env.SMOOTH==='false'?0:1,soft:env.SOFT==='false'?0:1}; // smooth/human-like reward and soft start (on unless set to false)
   const outDir=env.OUT||'out';fs.mkdirSync(outDir,{recursive:true});
   const logFile=outDir+'/log.txt';
   function log(s){const line=new Date().toISOString().slice(11,19)+'  '+s;console.log(line);fs.appendFileSync(logFile,line+'\n');}
@@ -29,11 +30,12 @@ async function main(){
   let gen0=0;
   if(env.RESUME==='true'&&fs.existsSync('resume.json')){
     const d=JSON.parse(fs.readFileSync('resume.json','utf8'));
-    if(d.theta&&d.theta.length===NP){S.theta=Float64Array.from(d.theta);gen0=d.gen||0;log('resumed from resume.json at generation '+gen0);}
+    const th=RS.migrate(d.theta);
+    if(th){S.theta=th;gen0=d.gen||0;log('resumed from resume.json at generation '+gen0+(d.theta.length!==NP?' (converted from the old network layout)':''));}
     else log('resume.json has the wrong size, starting fresh');
   }
   if(num('MINUTES',330)>340)log('MINUTES capped at 340: GitHub stops a job at 6 hours, so longer runs would lose their results');
-  log('cpus='+os.cpus().length+' workers='+NW+' pairs='+P+' scenarios='+K+' sigma='+SIGMA+' lr='+LR+' mode='+MODE+' minutes='+MINUTES);
+  log('cpus='+os.cpus().length+' workers='+NW+' pairs='+P+' scenarios='+K+' sigma='+SIGMA+' lr='+LR+' mode='+MODE+' smooth='+FLAGS.smooth+' soft='+FLAGS.soft+' minutes='+MINUTES);
 
   const pool=[];for(let i=0;i<NW;i++)pool.push(new Worker(__filename));
   function runJobs(jobs){
@@ -50,7 +52,7 @@ async function main(){
     });
   }
   function save(file,gen){
-    fs.writeFileSync(outDir+'/'+file,JSON.stringify({format:'ragdoll-policy',version:2,np:NP,gen:gen,theta:Array.prototype.slice.call(S.theta),hist:[]}));
+    fs.writeFileSync(outDir+'/'+file,JSON.stringify({format:'ragdoll-policy',version:3,np:NP,gen:gen,theta:Array.prototype.slice.call(S.theta),hist:[]}));
   }
   const zero=new Float64Array(NP),N=8;
   async function heldout(theta){

@@ -83,8 +83,8 @@
   }
 
   // training and Test use whichever reflexes are ticked (a policy learns to work together with them)
-  function reflexCfg(){return {noReflex:!opt('oReflex'),flags:{step:opt('oStep')?1:0,air:opt('oFall')?1:0,land:opt('oFall')?1:0,fall:opt('oFall')?1:0}};}
-  function reflexText(){return opt('oReflex')?('balance'+(opt('oStep')?', step':'')+(opt('oFall')?', fall/landing':'')):'none';}
+  function reflexCfg(){return {noReflex:!opt('oReflex'),flags:{step:opt('oStep')?1:0,air:opt('oFall')?1:0,land:opt('oFall')?1:0,fall:opt('oFall')?1:0,smooth:opt('oSmooth')?1:0,soft:opt('oSoft')?1:0}};}
+  function reflexText(){return (opt('oReflex')?('balance'+(opt('oStep')?', step':'')+(opt('oFall')?', fall/landing':'')):'none')+(opt('oSmooth')?' · smooth reward':'')+(opt('oSoft')?' · soft start':'');}
   var training=false;
   function esGeneration(){
     var P=Math.max(2,Math.round(num('nPairs',12))),K=Math.max(1,Math.round(num('nScen',2)));
@@ -162,12 +162,13 @@
 
   // ---- save / load policy as a file ----
   function policyToText(){
-    return JSON.stringify({format:'ragdoll-policy',version:2,np:NP,gen:ES.gen,theta:Array.prototype.slice.call(ES.theta),hist:ES.hist});
+    return JSON.stringify({format:'ragdoll-policy',version:3,np:NP,gen:ES.gen,theta:Array.prototype.slice.call(ES.theta),hist:ES.hist});
   }
   function loadFromText(text){
     var d=JSON.parse(text);
-    if(!d||!d.theta||d.theta.length!==NP)throw new Error('wrong file (expected '+NP+' weights, got '+(d&&d.theta?d.theta.length:'none')+')');
-    ES.theta=Float64Array.from(d.theta);ES.gen=d.gen||0;ES.hist=d.hist||[];
+    var th=d&&RS.migrate(d.theta); // old files (4378 weights) are converted to the current network and behave the same
+    if(!th)throw new Error('wrong file (expected '+NP+' weights, got '+(d&&d.theta?d.theta.length:'none')+')');
+    ES.theta=th;ES.gen=d.gen||0;ES.hist=d.hist||[];
     ES.m=new Float64Array(NP);ES.v=new Float64Array(NP);ES.t=0;updateInfo();
   }
   document.getElementById('bSave').onclick=function(){
@@ -203,6 +204,7 @@
     var x=cam.x+(rigs.length?(Math.random()-0.5)*0.6:-0.2);
     var sc=RS.sampleScenario(RS.rngMake((Math.random()*1e9)|0),{only:kind==='stand'?'stand':kind,pushMax:1.5});
     var o={pose:kind==='stand'?null:sc.pose,rootAng:kind==='stand'?0:sc.rootAng,h:kind==='drop'?Math.max(0.3,sc.h):0,clear:kind==='fallen'?0.01:0.02};
+    RS.FLAGS.soft=opt('oSoft')?1:0;
     var rig=RS.buildRig(world,x,0,-(++group),o);
     if(kind==='drop'&&sc.vel)rig.parts.forEach(function(b){b.setLinearVelocity(Vec2(sc.vel.vx,sc.vel.vy));b.setAngularVelocity(sc.vel.w);});
     rigs.push(rig);liveBufs.push(RS.newBuf());
@@ -305,7 +307,7 @@
   document.getElementById('pL').onclick=function(){push(-1);};
   document.getElementById('pR').onclick=function(){push(1);};
   document.getElementById('oUse').onchange=function(){
-    if(!opt('oUse'))rigs.forEach(function(r){r.tgt.fill(0);r.stiff[0]=r.stiff[1]=r.stiff[2]=1;r.ctrls.forEach(function(c){c.target=0;});});
+    if(!opt('oUse'))rigs.forEach(function(r){r.tgt.fill(0);r.stiff.fill(1);r.ctrls.forEach(function(c){c.target=0;});});
   };
 
   // ---------- draw ----------

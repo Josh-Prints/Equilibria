@@ -41,6 +41,8 @@ details button{font-size:14px;padding:8px 12px}
   <label><input type="checkbox" id="oReflex" checked> Balance reflex</label>
   <label><input type="checkbox" id="oStep" checked> Step reflex: legs out when falling</label>
   <label><input type="checkbox" id="oFall"> Fall &amp; landing reflex (experimental)</label>
+  <label><input type="checkbox" id="oSmooth" checked> Train for smooth, human-like motion</label>
+  <label><input type="checkbox" id="oSoft" checked> Soft start: ease into standing</label>
   <div class="row"><button id="bSave">Save file</button><button id="bLoad">Load file</button></div>
   <input type="file" id="fIn" accept=".json,application/json" style="display:none">
   <div class="row"><button id="pL">&#9664; Push</button><button id="pR">Push &#9654;</button></div>

@@ -21,6 +21,12 @@ on:
       resume:
         description: 'Resume from resume.json in the repo (true/false)'
         default: 'false'
+      smooth:
+        description: 'Reward smooth, human-like motion (true/false)'
+        default: 'true'
+      soft:
+        description: 'Soft start: ease into standing after spawning (true/false)'
+        default: 'true'
 
 jobs:
   train:
@@ -40,6 +46,8 @@ jobs:
           SIGMA: ${{ inputs.sigma }}
           LR: ${{ inputs.lr }}
           RESUME: ${{ inputs.resume }}
+          SMOOTH: ${{ inputs.smooth }}
+          SOFT: ${{ inputs.soft }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
