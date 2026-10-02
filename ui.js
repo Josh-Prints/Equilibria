@@ -316,17 +316,20 @@
   function syncMenu(){
     $('bSlowB').textContent='Slow motion: '+(opt('oSlow')?'on':'off');
     $('mSound').textContent=$('sSound').textContent='Sound: '+(opt('oSound')?'on':'off');
-    $('mGore').innerHTML=$('sGore').innerHTML='Blood &amp; gore: '+(opt('oGore')?'on':'off');
-    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),gore:opt('oGore')}));}catch(_){}
+    var cv=+$('rCrush').value,gv=+$('rGore').value;$('vCrush').textContent=cv;$('vGore').textContent=gv;
+    $('oGore').checked=gv>0;GM=gv/10;
+    $('gDesc').textContent=gv===0?'No blood, no limbs coming off, nobody dies.':gv<4?'A little blood, bones break, can die. Limbs stay on.':gv<7?'Bleeding, limbs can be torn off.':gv<10?'Lots of blood, crushed limbs shatter.':'Everything.';
+    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),goreLv:gv,crush:cv}));}catch(_){}
     if(AC&&master)master.gain.value=opt('oSound')?0.9:0;
   }
-  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;$('oGore').checked=so.gore;}}catch(_){}
+  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;if(so.goreLv!=null)$('rGore').value=so.goreLv;else if(so.gore===false)$('rGore').value=0;if(so.crush!=null)$('rCrush').value=so.crush;}}catch(_){}
   function pauseMenu(on){userPaused=on;$('pmenu').hidden=!on;setOn('bPause',on);}
   $('bPause').onclick=function(){pauseMenu(true);};
   $('mResume').onclick=function(){pauseMenu(false);};
   $('bSlowB').onclick=function(){tgl('oSlow');};
   $('mSound').onclick=$('sSound').onclick=function(){tgl('oSound');audioInit();};
-  $('mGore').onclick=$('sGore').onclick=function(){tgl('oGore');};
+  $('mSet').onclick=$('sSet').onclick=function(){$('smenu').hidden=false;};$('sDone').onclick=function(){$('smenu').hidden=true;};
+  $('rCrush').oninput=$('rGore').oninput=syncMenu;
   $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];});pauseMenu(false);};
   $('mMain').onclick=function(){pauseMenu(false);init();var sp=$('splash');sp.hidden=false;sp.style.opacity=1;};
   $('bPlay').onclick=function(){var sp=$('splash');sp.style.transition='opacity .4s';sp.style.opacity=0;setTimeout(function(){sp.hidden=true;},400);audioInit();
@@ -474,13 +477,17 @@
   function partOf(r,k){var nb=r.bodies.length;return k<nb?r.bodies[k]:r.chunks[k-nb].b;}
   function layerK(r,k){var nb=r.bodies.length;return layerOf(k<nb?k:r.chunks[k-nb].k);}
   function allParts(r){return r.chunks?r.bodies.concat(r.chunks.filter(function(c){return !c.gone;}).map(function(c){return c.b;})):r.bodies;}
+  var GM=1; // gore setting / 10: scales how much blood comes out
+  function gn(n){return Math.floor(n*GM+Math.random());}
   function gush(x,y,vx,vy,n,spd,spread,gib){
+    n=gn(n);
     for(var i=0;i<n&&parts.length<MAXP;i++){
       var a=Math.random()*Math.PI*2,s=spd*(0.3+Math.random()*0.9);
       parts.push({x:x,y:y,vx:vx+Math.cos(a)*s*spread,vy:vy+Math.sin(a)*s*spread+(spread<1?s*0.2:0),r:gib?0.02+Math.random()*0.03:0.006+Math.random()*0.014,g:!!gib,life:6,L:gL,ck:!gib&&Math.random()<STICK});
     }
   }
   function spray(p,dx,dy,n,spd){ // directed jet
+    n=gn(n);
     for(var i=0;i<n&&parts.length<MAXP;i++){
       var s=spd*(0.6+Math.random()*0.6),j=(Math.random()-0.5)*0.5,c=Math.cos(j),sn=Math.sin(j);
       parts.push({x:p.x,y:p.y,vx:(dx*c-dy*sn)*s,vy:(dx*sn+dy*c)*s,r:0.008+Math.random()*0.014,g:false,life:6,L:gL,ck:Math.random()<0.2});
@@ -525,9 +532,9 @@
     var vs=b.getFixtureList().getShape().m_vertices,v=vs[Math.random()*vs.length|0],u=vs[Math.random()*vs.length|0],t=Math.random()*0.8,m=Math.random();
     return b.getWorldPoint(Vec2((v.x*m+u.x*(1-m))*t,(v.y*m+u.y*(1-m))*t));
   }
-  function splats(r,k,n,s){for(var i=0;i<n;i++)addDecal(r,k,randPt(partOf(r,k)),s*(0.6+Math.random()*0.8));}
+  function splats(r,k,n,s){n=gn(n);for(var i=0;i<n;i++)addDecal(r,k,randPt(partOf(r,k)),s*(0.6+Math.random()*0.8));}
   function ooze(r,k,w){
-    if(k<0||parts.length>=MAXP)return;var b=partOf(r,k),f=b&&b.getFixtureList();if(!f)return;
+    if(k<0||parts.length>=MAXP||Math.random()>GM)return;var b=partOf(r,k),f=b&&b.getFixtureList();if(!f)return;
     var q={x:w.x,y:w.y,vx:0,vy:0,r:0.007+Math.random()*0.007,g:false,life:8,ck:true,L:layerK(r,k),vol:4+(Math.random()*6|0)};
     stick(q,{r:r,k:k,b:b,f:f});parts.push(q);
   }
@@ -867,7 +874,8 @@
       acc+=dt;
       var use=opt('oUse'),pd=opt('oPD'),reflex=opt('oReflex'),i;
       RS.FLAGS.air=RS.FLAGS.land=RS.FLAGS.fall=opt('oFall')?1:0;
-      RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;RS.FLAGS.cower=opt('oCower')?1:0;RS.FLAGS.die=opt('oDie')?1:0;RS.FLAGS.protect=opt('oProtect')?1:0;RS.FLAGS.inj=opt('oInj')?1:0;RS.FLAGS.sever=opt('oSever')?1:0;RS.FLAGS.crush=RS.FLAGS.bleed=opt('oGore')?1:0;
+      RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;RS.FLAGS.cower=opt('oCower')?1:0;RS.FLAGS.die=opt('oDie')?1:0;RS.FLAGS.protect=opt('oProtect')?1:0;RS.FLAGS.inj=opt('oInj')?1:0;var gv=+$('rGore').value;RS.FLAGS.sever=opt('oSever')&&gv>=4?1:0;RS.FLAGS.shatter=gv>=7?1:0;RS.FLAGS.crush=1;RS.FLAGS.bleed=gv>0?1:0;RS.FLAGS.bleedMul=gv/10;RS.FLAGS.death=gv>0?1:0;if(!gv)RS.FLAGS.die=0;
+      RS.FLAGS.crushLimb=0.25*+$('rCrush').value;RS.FLAGS.crushImp=12*RS.FLAGS.crushLimb; // settings: 7 (default) = 1.75, harder to crush than before (1.25)
       while(acc>=DT){
         if((use||reflex)&&stepCount%SUB===0)for(i=0;i<rigs.length;i++)RS.act(rigs[i],use?ES.theta:ZERO_TH,liveBufs[i],liveRng,{delay:1,noise:0.005,reflex:reflex}); // reflexes run even when the policy is off (untrained = zero weights)
         if(pd)for(i=0;i<rigs.length;i++)RS.pdRig(rigs[i]);

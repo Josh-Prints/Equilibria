@@ -219,3 +219,8 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.1 hotfix 1
 - Draw order is now far arm, far leg, head/torso, near leg, near arm (5 slots in `layerOf`), so far-side limbs sit behind the body. Tears moved to the torso slot (2). Label shows "beta v0.2.1 hotfix 1"; drop the hotfix suffix and bump to v0.2.2 with the next feature.
+
+## v0.2.2
+- Settings overlay (#smenu) from the main menu and pause menu replaces the Blood & gore toggles. Saved in localStorage eqOpts {goreLv, crush}.
+- Crush threshold 1-10 (default 7): FLAGS.crushLimb=0.25*v (was 1.25), crushImp=12*crushLimb. At 7, 1 crush in 40 hard slams (was 8).
+- Gore 0-10: GM=v/10 scales blood particles/splats/ooze; bleedMul=v/10; 0 = no blood, no sever, FLAGS.death=0 (sim guards every rig.dead=true); 1-3 bones and death, limbs stay on; 4+ sever; 7+ shatter.
