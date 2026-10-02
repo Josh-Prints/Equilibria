@@ -161,3 +161,4 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Severing: smoothed force pulling the joint apart (not compression) above `SEV` 95 N destroys the joint. Only dragging gets there (115-130); falls and pushes stay under 35. Limbs only. Reset is the only way back.
 - Panel: tick boxes per bone (break/heal), Knocked out, Dead, Break all (everything but the neck), Heal all. API: `RS.breakBone(rig,k,on)`, `RS.sever(rig,k)`.
 - Survival with injuries on is unchanged (push 34/40, drop 22/40).
+- Death depends on what hits (real falls: feet-first ~6% die vs ~45-57% head/front/side first; overall LD50 ~4 storeys). `dieHead` 8.5 (head-first ~4-5 m), `dieTorso` 11.5 (flat ~12 m), `dieLimb` 21 (feet-first ~17-20 m). Sim results: feet-first 3 m = ankle, 5-16 m = legs + back broken but alive, 20 m dead; flat 8 m = back broken, 12 m+ dead; head-first 2-3 m = knocked out, 5 m+ = neck broken, dead. A torso hit above 9 m/s breaks the spine.
