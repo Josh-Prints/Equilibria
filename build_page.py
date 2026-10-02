@@ -202,11 +202,12 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.9</div>
+  <div class="ver">beta v0.2.10</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
   <h2 class="gt" data-t="SETTINGS">SETTINGS</h2>
+  <div class="sl"><div class="slh"><span>Realism</span><b id="vReal">Default</b></div><input type="range" id="rReal" min="0" max="2" step="1" value="1"><div class="sld"><span>glass</span><span>realistic</span></div><div class="slx" id="rDesc"></div></div>
   <div class="sl"><div class="slh"><span>Crush threshold</span><b id="vCrush">7</b></div><input type="range" id="rCrush" min="1" max="10" step="1" value="7"><div class="sld"><span>crushes easily</span><span>almost never</span></div></div>
   <div class="sl"><div class="slh"><span>Gore</span><b id="vGore">Full</b></div><input type="range" id="rGore" min="0" max="4" step="1" value="4"><div class="sld"><span>none</span><span>full</span></div></div>
   <div class="slx" id="gDesc"></div>
@@ -221,7 +222,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.9</div>
+  <div class="ver">beta v0.2.10</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">

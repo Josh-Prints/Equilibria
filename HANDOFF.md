@@ -245,3 +245,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.9
 - Bone breaks and limb tear-offs use real-world forces scaled by mass (rig 1.8 kg vs 75 kg person: game N = real N x 0.024). Break: neck 4 kN, back 5.5, upper arm 2.5, forearm 2, wrist 1.8, femur 4, tibia 3.5, ankle 3. Tear-off (SEVJ, per joint): shoulder 10 kN, elbow 7, wrist 5, hip 15, knee 10, ankle 7. Drop tests: head-first neck breaks from ~3 m (all at 8 m), feet-first ankles from ~5 m, knees/hips by 12 m. Dragging can now only just tear off a hand; arms and legs effectively never by pulling.
+
+## v0.2.10
+- Realism slider in settings (FLAGS.realism, saved as eqOpts.real): 0 Glass (default values halved: breaks, tears and crushes far easier), 1 Default (the pre-v0.2.5 tuning: crush on one-tick velocity change with old CRUSHL x1.75, old BRK, single SEV 95) - the starting value, 2 Realistic (v0.2.5/v0.2.9 real-world numbers). Crush threshold slider still multiplies on top (value/7).
