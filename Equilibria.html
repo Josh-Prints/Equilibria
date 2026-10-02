@@ -10,7 +10,7 @@
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#2c3035;--fg:#e6e9ed;--btn:#3d434b;--panel:#23272cdd}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--fg);font-family:system-ui,Arial,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 canvas#c{display:block;width:100%;height:100%;touch-action:none}
-#bar{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;justify-content:center;flex-wrap:wrap;padding:0 8px}
+#bar{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;justify-content:center;flex-wrap:nowrap;padding:0 8px}
 button{font:600 15px system-ui,Arial,sans-serif;padding:11px 14px;border:0;border-radius:10px;background:var(--btn);color:var(--fg)}
 #hint{position:fixed;bottom:calc(112px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;font-size:12px;opacity:0;color:#dfe3e8;pointer-events:none;padding:0 8px}
 #panels{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));left:8px;display:flex;flex-direction:column;gap:6px;max-height:calc(100% - 150px);overflow:auto;max-width:calc(100% - 16px)}
@@ -25,7 +25,7 @@ details button{font-size:14px;padding:8px 12px}
 #info{font-size:12px;line-height:1.45;font-variant-numeric:tabular-nums;white-space:pre-wrap;max-width:300px}
 #chart{width:220px;height:70px;display:block;margin-top:4px}
 button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1.3)}
-#bar button{min-width:44px;box-shadow:0 2px 0 #0006}#bar button.on{background:#c0392b}
+#bar button{min-width:44px;white-space:nowrap;box-shadow:0 2px 0 #0006}#bar button.on{background:#c0392b}
 #hint{transition:opacity 1s}
 #hud{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:8px;display:flex;flex-direction:column;gap:4px;pointer-events:none;font:600 12px system-ui,Arial,sans-serif}
 .hc{background:var(--panel);border-radius:8px;padding:5px 8px;min-width:110px;pointer-events:auto;cursor:pointer}.hc:active{filter:brightness(1.4)}
@@ -107,8 +107,6 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
 <div id="hint">1 finger: drag ragdoll or pan · 2 fingers: zoom</div>
 <div id="bar">
   <button id="bSpawn">&#x2795; Spawn</button>
-  <button id="bDrop">&#x2B07;&#xFE0E; Drop</button>
-  <button id="bFall">Fallen</button>
   <button id="bPause">Pause</button>
   <button id="bReset2">Reset</button>
   <button id="bIn">+</button>
@@ -137,7 +135,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bClean">Clean up blood</button>
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
-  <div class="ver">beta v0.1.13</div>
+  <div class="ver">beta v0.1.14</div>
 </div>
 
 <div id="splash">
@@ -145,7 +143,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <div><span class="tag">BETA</span></div>
   <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
   <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
-  <div class="ver">beta v0.1.13</div>
+  <div class="ver">beta v0.1.14</div>
   <button id="bPlay">Play</button>
   <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sGore" class="tg sm">Blood &amp; gore: on</button></div>
 </div>
@@ -1442,8 +1440,6 @@ var RS=(function(){
   });
 
   document.getElementById('bSpawn').onclick=function(){spawn('stand');};
-  document.getElementById('bDrop').onclick=function(){spawn('drop');};
-  document.getElementById('bFall').onclick=function(){spawn('fallen');};
   document.getElementById('bReset').onclick=document.getElementById('bReset2').onclick=function(){init();pauseMenu(false);};
   var userPaused=false,MAXR=10;
   function setOn(id,on){document.getElementById(id).classList.toggle('on',!!on);}

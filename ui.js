@@ -308,8 +308,6 @@
   });
 
   document.getElementById('bSpawn').onclick=function(){spawn('stand');};
-  document.getElementById('bDrop').onclick=function(){spawn('drop');};
-  document.getElementById('bFall').onclick=function(){spawn('fallen');};
   document.getElementById('bReset').onclick=document.getElementById('bReset2').onclick=function(){init();pauseMenu(false);};
   var userPaused=false,MAXR=10;
   function setOn(id,on){document.getElementById(id).classList.toggle('on',!!on);}
