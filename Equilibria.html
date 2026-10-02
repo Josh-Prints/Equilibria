@@ -135,7 +135,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bClean">Clean up blood</button>
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
-  <div class="ver">beta v0.2.1</div>
+  <div class="ver">beta v0.2.1 hotfix 1</div>
 </div>
 
 <div id="splash">
@@ -143,7 +143,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <div><span class="tag">BETA</span></div>
   <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
   <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
-  <div class="ver">beta v0.2.1</div>
+  <div class="ver">beta v0.2.1 hotfix 1</div>
   <button id="bPlay">Play</button>
   <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sGore" class="tg sm">Blood &amp; gore: on</button></div>
 </div>
@@ -1622,8 +1622,9 @@ var RS=(function(){
   function sfx(n,a){if(AC&&opt('oSound')&&AC.state==='running')SFX[n](a);}
 
   var parts=[],stains=[],MAXP=1400,gL=2,STICK=0.35;
-  // draw layers, bottom to top: 0 head and torso, 1 legs, 2 arms (blood, tears and strands go on the layer they came from)
-  function layerOf(k){return k<4?0:((k-4)%6<3?2:1);}
+  // draw layers, bottom to top: far arm, far leg, head and torso, near leg, near arm (blood, tears and strands go on the layer they came from)
+  // draw slots, bottom to top: 0 far arm, 1 far leg, 2 head and torso, 3 near leg, 4 near arm
+  function layerOf(k){if(k<4)return 2;var arm=(k-4)%6<3;return k<10?(arm?0:1):(arm?4:3);}
   // parts are numbered 0-15 for the body, then 16+ for chunks of shattered limbs (rig.chunks)
   function partOf(r,k){var nb=r.bodies.length;return k<nb?r.bodies[k]:r.chunks[k-nb].b;}
   function layerK(r,k){var nb=r.bodies.length;return layerOf(k<nb?k:r.chunks[k-nb].k);}
@@ -1745,7 +1746,7 @@ var RS=(function(){
       var hurtLvl=r.dead||r.koT>0?0:Math.max(r.pain||0,r.cowering?0.3:0);
       if(hurtLvl>0.12&&!r.headCrushed&&!(r.inj&&r.inj.gone[0])&&Math.random()<dt*(0.8+2.5*Math.min(1,hurtLvl))&&parts.length<MAXP){
         var hd=r.bodies[0],S=r.scale||1,lx=0.055*(r.dir||1)*S,ly=0.03*S,e=hd.getWorldPoint(Vec2(lx,ly));
-        var tq={x:e.x,y:e.y,vx:0,vy:0,r:(0.011+Math.random()*0.005)*S,g:false,t:true,life:4,ck:true,L:0};stick(tq,{r:r,k:0,b:hd,f:hd.getFixtureList()});parts.push(tq);
+        var tq={x:e.x,y:e.y,vx:0,vy:0,r:(0.011+Math.random()*0.005)*S,g:false,t:true,life:4,ck:true,L:2};stick(tq,{r:r,k:0,b:hd,f:hd.getFixtureList()});parts.push(tq);
       }
       if(!gore)return;
       // spurting stumps: pulses with the heartbeat, weaker and faster as the blood runs out; a dead heart just oozes
@@ -1936,7 +1937,7 @@ var RS=(function(){
     for(gyy=Math.ceil(g0.y);gyy<=g1.y;gyy++){var sy=toScreen(Vec2(0,gyy)).y;ctx.moveTo(0,sy);ctx.lineTo(W,sy);}
     ctx.stroke();ctx.restore();
     drawGround(gy);
-    for(var L=0;L<3;L++){drawFlesh(L,true);drawFlesh(L,false);drawStrands(L);drawBlood(L);} // body, then legs, then arms on top
+    for(var L=0;L<5;L++){drawFlesh(L,true);drawFlesh(L,false);drawStrands(L);drawBlood(L);} // far arm, far leg, body, near leg, near arm on top
     if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;drawBodies(false);}
     { // name above the head (only once you've named them)
       ctx.font='600 13px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;

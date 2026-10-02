@@ -216,3 +216,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.1
 - Parts lying in a floor pool soak it up: `soak()` in ui.js adds splats at polygon vertices touching a stain (y<0.03) and shrinks the stain a little. When a part is at the 18-splat cap it grows the splat already there or swaps out the smallest, so the contact side still shows.
+
+## v0.2.1 hotfix 1
+- Draw order is now far arm, far leg, head/torso, near leg, near arm (5 slots in `layerOf`), so far-side limbs sit behind the body. Tears moved to the torso slot (2). Label shows "beta v0.2.1 hotfix 1"; drop the hotfix suffix and bump to v0.2.2 with the next feature.
