@@ -31,7 +31,9 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
 #bar button{min-width:44px;box-shadow:0 2px 0 #0006}#bar button.on{background:#c0392b}
 #hint{transition:opacity 1s}
 #hud{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:8px;display:flex;flex-direction:column;gap:4px;pointer-events:none;font:600 12px system-ui,Arial,sans-serif}
-.hc{background:var(--panel);border-radius:8px;padding:5px 8px;min-width:110px}
+.hc{background:var(--panel);border-radius:8px;padding:5px 8px;min-width:110px;pointer-events:auto;cursor:pointer}.hc:active{filter:brightness(1.4)}
+#rnIn{font:600 18px system-ui,Arial,sans-serif;padding:10px 12px;border-radius:10px;border:0;width:220px;background:#eef0f3;color:#111}
+.ov .row button{min-width:100px}
 .hb{height:6px;border-radius:3px;background:#0006;margin-top:4px;overflow:hidden}.hb i{display:block;height:100%;background:#d63031}
 #splash[hidden]{display:none}
 #splash{position:fixed;inset:0;background:radial-gradient(circle at 50% 40%,#3a4048,#1c1f23);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:10;text-align:center;padding:24px}
@@ -109,10 +111,16 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bDrop">&#x2B07;&#xFE0E; Drop</button>
   <button id="bFall">Fallen</button>
   <button id="bPause">Pause</button>
+  <button id="bReset2">Reset</button>
   <button id="bIn">+</button>
   <button id="bOut">&minus;</button>
 </div>
 <div id="hud"></div>
+<div id="rename" class="ov" hidden>
+  <h2>Name this human</h2>
+  <input id="rnIn" maxlength="16" placeholder="Name" autocomplete="off">
+  <div class="row"><button id="rnOk">Save</button><button id="rnCancel">Cancel</button></div>
+</div>
 <div id="pmenu" class="ov" hidden>
   <h2>Paused</h2>
   <button id="mResume">Resume</button>
