@@ -634,7 +634,7 @@
       }
     }
     if(!paused)goreStep(Math.min(dt,0.05));
-    draw();drawInjuries();if(++injN%10===0){injSync();hud();}requestAnimationFrame(frame);
+    draw();if(++injN%10===0){injSync();hud();}requestAnimationFrame(frame);
   }
   window.EQ={rigs:function(){return rigs;}}; // for poking at it from the console
   init();updateInfo();requestAnimationFrame(frame);
