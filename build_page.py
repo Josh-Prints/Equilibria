@@ -8,11 +8,11 @@ html='''<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Equilibria (beta)</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#2c3035">
+<meta name="theme-color" content="#0c0b0a">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
-:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#2c3035;--fg:#e6e9ed;--btn:#3d434b;--panel:#23272cdd}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#0c0b0a;--fg:#e9e4d8;--btn:#151310;--panel:#0f0e0ce6}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--fg);font-family:system-ui,Arial,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 canvas#c{display:block;width:100%;height:100%;touch-action:none}
 #bar{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;justify-content:center;flex-wrap:nowrap;padding:0 8px}
@@ -51,6 +51,21 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
 .ov button{min-width:220px;font-size:16px}
 #smenu{z-index:11}.sl{width:260px;max-width:86vw}.slh{display:flex;justify-content:space-between;font:600 15px system-ui,Arial,sans-serif;margin-bottom:4px}
 .sl input{width:100%;accent-color:#c0392b;height:28px}.sld{display:flex;justify-content:space-between;font-size:11px;opacity:.6}.slx{font-size:12px;opacity:.7;max-width:260px;text-align:center;min-height:32px}
+/* in-game: same dark CRT look as the menus */
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px);box-shadow:inset 0 0 90px 10px #000c}
+#bar button{font:500 20px/1 Teko,system-ui,sans-serif;letter-spacing:1px;text-transform:uppercase;padding:9px 10px 6px;flex:0 1 auto;min-width:0;border-radius:2px;background:#11100ee6;border:1px solid #3a342a;color:#c9c2b4;box-shadow:none}
+#bar button:active{color:#ffb020;border-color:#ffb020;filter:none;text-shadow:0 0 10px #ffb02088}
+#bar button.on{background:#ffb020;color:#0c0b0a;border-color:#ffb020}
+#hint{font:400 12px 'Share Tech Mono',monospace;color:#a9a397}
+#hud{font:400 12px 'Share Tech Mono',monospace}
+.hc{border-radius:2px;border:1px solid #2c2720;border-left:2px solid #ffb020;background:#0f0e0ce6;color:#d8d2c4}
+.hb{border-radius:0;background:#2a2520}
+#hmenu{border-radius:2px;border:1px solid #3a342a;background:#0f0e0cf2}
+#hmenu button{font:500 22px/1 Teko,system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;background:none;border-radius:0;color:#c9c2b4;padding:8px 14px 5px}
+#hmenu button:active{color:#ffb020;filter:none}
+#rename.gm{align-items:flex-start!important}#rename .gt{font-size:clamp(34px,10vw,52px)}#rename .row{gap:16px}
+#rename .row button{all:unset;cursor:pointer;font:500 30px/1.1 Teko,system-ui,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#a9a397}#rename .row button:active{color:#ffb020}
+#rnIn{font:400 18px 'Share Tech Mono',monospace;border-radius:0;background:#14120f;color:#ffb020;border:1px solid #3a342a;outline:none}
 /* glitchy dark menus (main, pause, settings): CRT scanlines, film noise, chromatic split title, flicker */
 .gm{background:radial-gradient(ellipse at 30% 40%,#16130f 0%,#070707 55%,#000 100%)!important;backdrop-filter:none!important;align-items:flex-start!important;justify-content:center!important;text-align:left!important;
   padding:24px 24px 24px max(28px,10vw)!important;gap:8px!important;font-family:Teko,'Share Tech Mono',system-ui,sans-serif;color:#e9e4d8;overflow:hidden;animation:gmShake 7s infinite steps(1)}
@@ -148,7 +163,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
 </div>
 <div id="hint">1 finger: drag ragdoll or pan · 2 fingers: zoom</div>
 <div id="bar">
-  <button id="bSpawn">&#x2795; Spawn</button>
+  <button id="bSpawn">Spawn</button>
   <button id="bPause">Pause</button>
   <button id="bReset2">Reset</button>
   <button id="bIn">+</button>
@@ -163,8 +178,8 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="hmKill">Kill</button>
   <button id="hmRemove">Remove</button>
 </div>
-<div id="rename" class="ov" hidden>
-  <h2>Name this human</h2>
+<div id="rename" class="ov gm" hidden>
+  <h2 class="gt" data-t="NAME THIS HUMAN">NAME THIS HUMAN</h2>
   <input id="rnIn" maxlength="16" placeholder="Name" autocomplete="off">
   <div class="row"><button id="rnOk">Save</button><button id="rnCancel">Cancel</button></div>
 </div>
@@ -179,7 +194,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.6</div>
+  <div class="ver">beta v0.2.7</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -198,7 +213,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.6</div>
+  <div class="ver">beta v0.2.7</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">

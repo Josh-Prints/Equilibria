@@ -236,3 +236,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.6
 - Main, pause and settings menus restyled dark and glitchy (inspired by R.E.P.O.'s menu look, nothing copied): `.gm` class in build_page.py, Teko + Share Tech Mono from Google Fonts, left-aligned uppercase menu items that go amber with a ">" when pressed, CRT scanlines, animated film noise, red/cyan split title glitch, occasional screen jolt. Respects prefers-reduced-motion.
+
+## v0.2.7
+- Whole game themed to match the menus: near-black backdrop, faint amber grid, dark concrete floor with a thin amber line, full-screen scanline/vignette overlay (body::after, z 5, under the menus), Teko uppercase bar and hold-menu buttons with amber press state, mono-font HUD cards with an amber edge, rename overlay uses the menu style. Spawn button lost its emoji so the bar fits.
