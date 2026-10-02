@@ -162,3 +162,10 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Panel: tick boxes per bone (break/heal), Knocked out, Dead, Break all (everything but the neck), Heal all. API: `RS.breakBone(rig,k,on)`, `RS.sever(rig,k)`.
 - Survival with injuries on is unchanged (push 34/40, drop 22/40).
 - Death depends on what hits (real falls: feet-first ~6% die vs ~45-57% head/front/side first; overall LD50 ~4 storeys). `dieHead` 8.5 (head-first ~4-5 m), `dieTorso` 11.5 (flat ~12 m), `dieLimb` 21 (feet-first ~17-20 m). Sim results: feet-first 3 m = ankle, 5-16 m = legs + back broken but alive, 20 m dead; flat 8 m = back broken, 12 m+ dead; head-first 2-3 m = knocked out, 5 m+ = neck broken, dead. A torso hit above 9 m/s breaks the spine.
+
+## Gore and sound (FLAGS.crush, FLAGS.bleed; Debug: "Blood & gore", "Sound")
+- Crush: a limb part hitting the ground above `crushImp` 13 m/s is crushed (joint breaks); above `ripImp` 22 it's torn off. Head above 13 = crushed, dead.
+- Bleeding: `rig.blood` 1 -> 0. Each torn-off limb loses ~5%/s (less as blood runs out), broken bones a trickle. Under 45% it passes out, under 20% dead (~25 s with one limb off).
+- The sim pushes events to `rig.ev` (hit/break/crush/sever/bledout); ui.js `goreStep` turns them into blood particles, gibs, ground stains, heartbeat stump spurts and sounds.
+- Sounds are synthesized with Web Audio (no files): thuds, bone crunches, squelches, spurts, splats, plus a wind/room-tone ambient bed. Audio starts on the first tap (browser rule); `navigator.audioSession.type='playback'` lets iPhones play it with the silent switch on.
+- Visuals: skin-filled parts (paler as it bleeds out, bloodied where hurt), dirt ground texture. `window.EQ.rigs()` exposes the rigs for console poking.
