@@ -1,7 +1,7 @@
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:13,ripImp:22,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -527,12 +527,13 @@ var RS=(function(){
   function impacts(rig){
     var ps=rig.parts,n=ps.length,k;
     if(!rig.cpv)rig.cpv=new Float64Array(2*n);
-    rig.impS=0;
+    rig.impS=0;if(!rig.impB)rig.impB=new Float64Array(n);
     var it=0,id=0,live=(rig.ticks=(rig.ticks||0)+1)>12; // ignore the settle right after spawning
     for(k=0;k<n;k++){
       var v=ps[k].getLinearVelocity(),d=0;
       if(live&&onGround(ps[k]))d=Math.hypot(v.x-rig.cpv[2*k],v.y-rig.cpv[2*k+1]);
       rig.cpv[2*k]=v.x;rig.cpv[2*k+1]=v.y;
+      rig.impB[k]=d;if(d>2.5)ev(rig,'hit',k,d);
       if(k===0)rig.impH=d;
       if(k>=1&&k<=3&&d>rig.impS){rig.impS=d;rig.impSk=k;} // worst torso hit (spine fractures)
       if(k===0||k===1||k===3)it=Math.max(it,d);
@@ -579,13 +580,42 @@ var RS=(function(){
   function breakBone(rig,k,on){
     var I=injOf(rig);if(I.gone[k]||!!I.broken[k]===!!on)return;
     I.broken[k]=on?1:0;
-    if(on){rig.ctrls[k].j.enableLimit(false);if(k===0)rig.dead=true;}
+    if(on){rig.ctrls[k].j.enableLimit(false);if(k===0)rig.dead=true;ev(rig,'break',k);}
     else rig.age=Math.min(rig.age,0.3); // healed: the limit comes back once the joint is inside its range again (below)
   }
   function sever(rig,k){
     var I=injOf(rig);if(I.gone[k]||k<3)return; // limbs only
     var j=rig.ctrls[k].j;j.getBodyA().getWorld().destroyJoint(j);
     KIDS[k].forEach(function(q){I.gone[q]=1;I.broken[q]=0;});
+    ev(rig,'sever',k);
+  }
+  // events for the page (blood, sounds): {t:'break'|'sever'|'crush'|'hit', k: joint (or body for hits), d: strength}
+  function ev(rig,t,k,d){(rig.ev||(rig.ev=[])).push({t:t,k:k,d:d||0});if(rig.ev.length>64)rig.ev.shift();}
+  // CRUSH (FLAGS.crush): a limb part slammed into the ground hard enough is crushed (its joint breaks); harder still
+  // and it's ripped off (with FLAGS.sever). A head slammed that hard is crushed: dead.
+  // BLEED (FLAGS.bleed): each torn-off limb bleeds ~5%/s of its blood (heart pumping, slower as the blood runs out),
+  // broken bones a little. Under 45% it passes out, under 20% it's dead.
+  function crushBleed(rig,dt){
+    var I=injOf(rig),ps=rig.parts,k;
+    if(FLAGS.crush&&I.t>0.2&&rig.impB){
+      for(k=0;k<ps.length;k++){
+        var d=rig.impB[k];if(!(d>FLAGS.crushImp))continue;
+        if(k===0){if(!rig.dead){rig.dead=true;ev(rig,'crush',0,d);}continue;}
+        if(k<4)continue;
+        var j=k-1;if(I.gone[j])continue;
+        if(FLAGS.sever&&d>FLAGS.ripImp){ev(rig,'crush',j,d);sever(rig,j);}
+        else if(!I.broken[j]){ev(rig,'crush',j,d);breakBone(rig,j,true);}
+      }
+    }
+    if(rig.blood==null)rig.blood=1;
+    if(FLAGS.bleed&&rig.blood>0){
+      var w=0;for(k=3;k<NJ;k++){if(I.gone[k]&&(k===3||k===6||k===9||k===12||!I.gone[k-1]))w+=k%3===0?1:0.7;else if(I.broken[k])w+=0.05;}
+      if(I.broken[1]||I.broken[2])w+=0.1;
+      rig.bleedW=w;
+      rig.blood=Math.max(0,rig.blood-0.05*w*(0.3+0.7*rig.blood)*(rig.dead?0.3:1)*dt);
+      if(rig.blood<0.2&&!rig.dead){rig.dead=true;ev(rig,'bledout',0);}
+      else if(rig.blood<0.45&&!rig.dead)rig.koT=Math.max(rig.koT||0,0.5);
+    }
   }
   function injuries(rig,dt){
     var I=injOf(rig),k;I.t+=dt;
@@ -675,8 +705,9 @@ var RS=(function(){
       else if(k===0)t+=neck;else if(k===3||k===9)t+=sh;else if(k===4||k===10)t+=el;
       tt[k]=t;
     }
-    if(rf&&(FLAGS.cower||FLAGS.die||FLAGS.inj))impacts(rig);
+    if(rf&&(FLAGS.cower||FLAGS.die||FLAGS.inj||FLAGS.crush))impacts(rig);
     if(FLAGS.inj||FLAGS.sever||rig.inj)injuries(rig,dt);
+    if(rf&&(FLAGS.crush||FLAGS.bleed))crushBleed(rig,dt);
     if(rf&&FLAGS.die&&rig.impD>FLAGS.dieImp)rig.dead=true;
     if(rig.dead)return goLimp(rig,out);
     if(rig.koT>0){rig.koT-=dt;if(rig.koT<=0)rig.age=0;goLimp(rig,out);rig.ko=true;return out;} // knocked out: limp until it comes round

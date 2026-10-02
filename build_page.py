@@ -77,6 +77,8 @@ details button{font-size:14px;padding:8px 12px}
   <summary>Debug</summary>
   <div class="row"><button id="pL">&#9664; Push</button><button id="pR">Push &#9654;</button></div>
   <label>Strength <input type="range" id="pS" min="0.1" max="3" step="0.1" value="1" style="width:110px;height:auto"></label>
+  <label><input type="checkbox" id="oGore" checked> Blood &amp; gore</label>
+  <label><input type="checkbox" id="oSound" checked> Sound</label>
   <label><input type="checkbox" id="oBox" checked> Boxes</label>
   <label><input type="checkbox" id="oSkel"> Skeleton</label>
   <label><input type="checkbox" id="oJoint"> Joints</label>
