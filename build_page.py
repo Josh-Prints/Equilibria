@@ -9,6 +9,8 @@ html='''<!DOCTYPE html>
 <title>Equilibria (beta)</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#2c3035">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#2c3035;--fg:#e6e9ed;--btn:#3d434b;--panel:#23272cdd}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--fg);font-family:system-ui,Arial,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -49,6 +51,41 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
 .ov button{min-width:220px;font-size:16px}
 #smenu{z-index:11}.sl{width:260px;max-width:86vw}.slh{display:flex;justify-content:space-between;font:600 15px system-ui,Arial,sans-serif;margin-bottom:4px}
 .sl input{width:100%;accent-color:#c0392b;height:28px}.sld{display:flex;justify-content:space-between;font-size:11px;opacity:.6}.slx{font-size:12px;opacity:.7;max-width:260px;text-align:center;min-height:32px}
+/* glitchy dark menus (main, pause, settings): CRT scanlines, film noise, chromatic split title, flicker */
+.gm{background:radial-gradient(ellipse at 30% 40%,#16130f 0%,#070707 55%,#000 100%)!important;backdrop-filter:none!important;align-items:flex-start!important;justify-content:center!important;text-align:left!important;
+  padding:24px 24px 24px max(28px,10vw)!important;gap:8px!important;font-family:Teko,'Share Tech Mono',system-ui,sans-serif;color:#e9e4d8;overflow:hidden;animation:gmShake 7s infinite steps(1)}
+#pmenu.gm{background:radial-gradient(ellipse at 30% 40%,#16130fee 0%,#070707f2 55%,#000 100%)!important}
+.gm::before{content:"";position:absolute;inset:-50%;pointer-events:none;opacity:.09;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");animation:gmNoise .4s infinite steps(4)}
+.gm::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.38) 0 1px,transparent 1px 3px),linear-gradient(90deg,rgba(255,0,0,.025),rgba(0,255,255,.02));
+  box-shadow:inset 0 0 120px 30px #000;animation:gmFlick 5s infinite}
+.gm>*{position:relative;z-index:1}.gm>.ver{position:absolute}
+.gm .gt{margin:0;font:600 clamp(54px,17vw,92px)/0.85 Teko,system-ui,sans-serif;letter-spacing:5px;color:#f2ede1;text-shadow:0 0 18px #ffb02033}
+#pmenu .gt,#smenu .gt{font-size:clamp(46px,13vw,70px)}
+.gt::before,.gt::after{content:attr(data-t);position:absolute;left:0;top:0;width:100%;overflow:hidden;pointer-events:none}
+.gt::before{color:#ff2a1f;mix-blend-mode:screen;transform:translate(-2px,0);clip-path:inset(0 0 60% 0);animation:gmT1 2.6s infinite steps(1)}
+.gt::after{color:#19e6ff;mix-blend-mode:screen;transform:translate(2px,0);clip-path:inset(55% 0 0 0);animation:gmT2 3.1s infinite steps(1)}
+.gm .sub{font:400 15px 'Share Tech Mono',monospace;letter-spacing:1px;opacity:.6;text-transform:lowercase;margin:-2px 0 18px}
+#splash.gm .tag{text-transform:uppercase;letter-spacing:2px;vertical-align:1px;background:none;border:1px solid #ffb020;color:#ffb020;border-radius:0;padding:0 5px;font-size:11px;margin-right:6px}
+.gm nav{display:flex;flex-direction:column;gap:2px;margin:6px 0}
+.gm nav button,#splash #bPlay{all:unset;cursor:pointer;font:500 34px/1.1 Teko,system-ui,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#a9a397;padding:2px 0;white-space:nowrap;position:relative;transition:color .08s,transform .08s;-webkit-tap-highlight-color:transparent}
+.gm nav button::before{content:">";position:absolute;left:-22px;color:#ffb020;opacity:0;transition:opacity .08s}
+.gm nav button:hover,.gm nav button:active,.gm nav button:focus-visible{color:#ffb020;transform:translateX(8px);text-shadow:0 0 12px #ffb02088,-2px 0 #ff2a1f66,2px 0 #19e6ff55}
+.gm nav button:hover::before,.gm nav button:active::before{opacity:1}
+.gm nav button.on{color:#e9e4d8}
+#splash #bPlay{font-size:46px;color:#f2ede1}
+#pmenu nav button{font-size:30px}
+.gm .tip{font:400 12px 'Share Tech Mono',monospace;opacity:.4;margin-top:14px;max-width:300px}
+.gm .ver{font:400 13px 'Share Tech Mono',monospace;opacity:.45;color:#ffb020}
+.gm .sl{width:300px;max-width:78vw;margin:4px 0}.gm .slh{font:500 26px/1 Teko,system-ui,sans-serif;letter-spacing:1px;text-transform:uppercase;color:#a9a397}.gm .slh b{color:#ffb020;font-weight:500}
+.gm .sl input{accent-color:#ffb020}.gm .sld{font:400 11px 'Share Tech Mono',monospace}.gm .slx{font:400 12px 'Share Tech Mono',monospace;text-align:left;max-width:300px;opacity:.55}
+@keyframes gmNoise{0%{transform:translate(0,0)}25%{transform:translate(-8%,5%)}50%{transform:translate(6%,-7%)}75%{transform:translate(-4%,-3%)}}
+@keyframes gmFlick{0%,100%{opacity:1}47%{opacity:1}48%{opacity:.75}49%{opacity:1}82%{opacity:.9}83%{opacity:1}}
+@keyframes gmShake{0%,100%{transform:none;filter:none}62%{transform:translate(-3px,1px) skewX(-2deg);filter:hue-rotate(20deg) contrast(1.3)}62.6%{transform:translate(4px,0);filter:none}63.2%{transform:none}91%{transform:translate(2px,-1px)}91.5%{transform:none}}
+@keyframes gmT1{0%{clip-path:inset(0 0 60% 0);transform:translate(-2px,0)}20%{clip-path:inset(20% 0 50% 0);transform:translate(-5px,0)}22%{clip-path:inset(0 0 60% 0);transform:translate(-2px,0)}60%{clip-path:inset(70% 0 5% 0);transform:translate(4px,0)}62%{clip-path:inset(0 0 60% 0);transform:translate(-2px,0)}}
+@keyframes gmT2{0%{clip-path:inset(55% 0 0 0);transform:translate(2px,0)}35%{clip-path:inset(10% 0 75% 0);transform:translate(6px,0)}37%{clip-path:inset(55% 0 0 0);transform:translate(2px,0)}80%{clip-path:inset(40% 0 40% 0);transform:translate(-4px,0)}82%{clip-path:inset(55% 0 0 0);transform:translate(2px,0)}}
+@media (prefers-reduced-motion:reduce){.gm,.gm::before,.gm::after,.gt::before,.gt::after{animation:none}}
 </style>
 </head>
 <body>
@@ -131,8 +168,9 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <input id="rnIn" maxlength="16" placeholder="Name" autocomplete="off">
   <div class="row"><button id="rnOk">Save</button><button id="rnCancel">Cancel</button></div>
 </div>
-<div id="pmenu" class="ov" hidden>
-  <h2>Paused</h2>
+<div id="pmenu" class="ov gm" hidden>
+  <h2 class="gt" data-t="PAUSED">PAUSED</h2>
+  <nav>
   <button id="mResume">Resume</button>
   <button id="bSlowB" class="tg">Slow motion: off</button>
   <button id="mSound" class="tg">Sound: on</button>
@@ -140,24 +178,27 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bClean">Clean up blood</button>
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
-  <div class="ver">beta v0.2.5</div>
+  </nav>
+  <div class="ver">beta v0.2.6</div>
 </div>
 
-<div id="smenu" class="ov" hidden>
-  <h2>Settings</h2>
+<div id="smenu" class="ov gm" hidden>
+  <h2 class="gt" data-t="SETTINGS">SETTINGS</h2>
   <div class="sl"><div class="slh"><span>Crush threshold</span><b id="vCrush">7</b></div><input type="range" id="rCrush" min="1" max="10" step="1" value="7"><div class="sld"><span>crushes easily</span><span>almost never</span></div></div>
   <div class="sl"><div class="slh"><span>Gore</span><b id="vGore">Full</b></div><input type="range" id="rGore" min="0" max="4" step="1" value="4"><div class="sld"><span>none</span><span>full</span></div></div>
   <div class="slx" id="gDesc"></div>
-  <button id="sDone">Done</button>
+  <nav><button id="sDone">Done</button></nav>
 </div>
-<div id="splash">
-  <h1>EQUILIBRIA</h1>
-  <div><span class="tag">BETA</span></div>
-  <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
-  <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
-  <div class="ver">beta v0.2.5</div>
+<div id="splash" class="gm">
+  <h1 class="gt" data-t="EQUILIBRIA">EQUILIBRIA</h1>
+  <div class="sub"><span class="tag">BETA</span> a ragdoll that tries to stay alive</div>
+  <nav>
   <button id="bPlay">Play</button>
-  <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sSet" class="tg sm">Settings</button></div>
+  <button id="sSet">Settings</button>
+  <button id="sSound" class="tg">Sound: on</button>
+  </nav>
+  <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
+  <div class="ver">beta v0.2.6</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">

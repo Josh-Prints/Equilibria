@@ -233,3 +233,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.5
 - Crushing now uses each part's real impact speed into the floor (`rig.impV`: speed going in at first touch, or the velocity change if bigger) against real-world shatter speeds in m/s: upper arm 13, forearm 11, hand 11, thigh 17, shin 13, foot 12, head 14 (FLAGS.crushLimb=1, crushImp=14). The crush slider is a multiplier: value/7, so the default 7 is real-world.
+
+## v0.2.6
+- Main, pause and settings menus restyled dark and glitchy (inspired by R.E.P.O.'s menu look, nothing copied): `.gm` class in build_page.py, Teko + Share Tech Mono from Google Fonts, left-aligned uppercase menu items that go amber with a ">" when pressed, CRT scanlines, animated film noise, red/cyan split title glitch, occasional screen jolt. Respects prefers-reduced-motion.
