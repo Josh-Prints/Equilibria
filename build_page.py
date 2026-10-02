@@ -181,7 +181,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <div id="hlc"></div>
   <nav><button id="hlClose">Close</button></nav>
 </div>
-<div id="spmenu" hidden><button id="spHuman">Human</button><button id="spGun">Handgun</button></div>
+<div id="spmenu" hidden><button id="spHuman">Human</button><button id="spGun">Handgun</button><button id="spHammer">Sledgehammer</button><button id="spKnife">Knife</button></div>
 <div id="hmenu" hidden>
   <button id="hmRename">Rename</button>
   <button id="hmFollow">Follow</button>
@@ -206,7 +206,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.17</div>
+  <div class="ver">beta v0.2.18</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -226,7 +226,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.17</div>
+  <div class="ver">beta v0.2.18</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">

@@ -178,7 +178,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <div id="hlc"></div>
   <nav><button id="hlClose">Close</button></nav>
 </div>
-<div id="spmenu" hidden><button id="spHuman">Human</button><button id="spGun">Handgun</button></div>
+<div id="spmenu" hidden><button id="spHuman">Human</button><button id="spGun">Handgun</button><button id="spHammer">Sledgehammer</button><button id="spKnife">Knife</button></div>
 <div id="hmenu" hidden>
   <button id="hmRename">Rename</button>
   <button id="hmFollow">Follow</button>
@@ -203,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.17</div>
+  <div class="ver">beta v0.2.18</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -223,7 +223,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.17</div>
+  <div class="ver">beta v0.2.18</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1517,7 +1517,7 @@ var RS=(function(){
   // LIVE WORLD
   // =====================================================================
   function init(){
-    world=new planck.World({gravity:Vec2(0,-10)});
+    world=new planck.World({gravity:Vec2(0,-10)});world.on('begin-contact',meleeContact);
     drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;camFollow=null;items=[];fx=[];trig=null;
     ground=world.createBody();ground.createFixture(Box(1000,1,Vec2(0,-1),0),{friction:0.9});
     spawn('stand');
@@ -1535,11 +1535,68 @@ var RS=(function(){
     b.createFixture(Box(0.02,0.042,Vec2(-0.045,-0.03*s),-0.25*s),{density:2.2,friction:0.8,restitution:0.1}); // grip
     b.createFixture(Box(0.012,0.006,Vec2(-0.008,-0.014*s),0),{density:1,friction:0.6}); // trigger guard
   }
-  function gunOf(b){for(var i=0;i<items.length;i++)if(items[i].b===b)return items[i];return null;}
+  function itemOf(b){for(var i=0;i<items.length;i++)if(items[i].b===b)return items[i];return null;}
+  function gunOf(b){var g=itemOf(b);return g&&g.type==='gun'?g:null;}
   function aimAt(g,w){ // point the barrel at a world point, flipping the gun over when it swings past vertical
     var p=g.b.getPosition(),a=Math.atan2(w.y-p.y,w.x-p.x),s=Math.cos(a)<0?-1:1;
     if(s!==g.s){g.s=s;gunFix(g);}
     g.aim=a;
+  }
+  // MELEE: a sledgehammer and a knife you drag and swing. Contacts with people are queued in the physics callback
+  // (the world is locked there) and dealt with right after the step.
+  function spawnHammer(){
+    var b=world.createBody({type:'dynamic',position:Vec2(cam.x,Math.max(0.6,cam.y+0.3)),angle:0,bullet:true});
+    b.createFixture(Box(0.32,0.014,Vec2(0,0),0),{density:2,friction:0.7,restitution:0.05,userData:{part:'handle'}}); // ash handle
+    b.createFixture(Box(0.045,0.085,Vec2(0.345,0),0),{density:14,friction:0.6,restitution:0.1,userData:{part:'head'}}); // steel head
+    var g={type:'hammer',b:b,cd:{}};b.setUserData({item:'hammer'});items.push(g);
+  }
+  function spawnKnife(){
+    var b=world.createBody({type:'dynamic',position:Vec2(cam.x,Math.max(0.6,cam.y+0.3)),angle:0,bullet:true});
+    b.createFixture(Box(0.05,0.014,Vec2(-0.05,0),0),{density:2,friction:0.8,userData:{part:'handle'}});
+    b.createFixture(planck.Polygon([Vec2(0,-0.012),Vec2(0.13,-0.006),Vec2(0.16,0.012),Vec2(0,0.012)]),{density:4,friction:0.2,userData:{part:'blade'}}); // edge on the bottom, tip forward
+    var g={type:'knife',b:b,cd:{}};b.setUserData({item:'knife'});items.push(g);
+  }
+  var mq=[],midN=0;
+  function meleeContact(c){
+    var fa=c.getFixtureA(),fb=c.getFixtureB(),A=fa.getBody(),B=fb.getBody(),ga=itemOf(A),gb=itemOf(B),g=ga||gb;
+    if(!g||g.type==='gun'||(ga&&gb))return;
+    var wf=ga?fa:fb,ob=ga?B:A,H=partHit(ob);if(!H)return;
+    var wm=c.getWorldManifold(null),p=wm&&wm.points&&wm.points[0];if(!p)p=ob.getWorldCenter();
+    var va=g.b.getLinearVelocityFromWorldPoint(p),vb=ob.getLinearVelocityFromWorldPoint(p),rx=va.x-vb.x,ry=va.y-vb.y,n=wm.normal||Vec2(0,0);
+    var sn=Math.abs(rx*n.x+ry*n.y),st=Math.hypot(rx,ry);
+    mq.push({g:g,fp:(wf.getUserData()||{}).part,r:H.r,k:H.k,p:Vec2(p.x,p.y),sn:sn,st:st,d:Vec2(rx/(st||1),ry/(st||1))});
+  }
+  function meleeStep(){
+    if(!mq.length)return;var q=mq;mq=[];var now=performance.now();
+    q.forEach(function(h){
+      var g=h.g,r=h.r,k=h.k;if(rigs.indexOf(r)<0)return;var key=(r.mid||(r.mid=++midN))+'_'+k;if(g.cd[key]&&now-g.cd[key]<250)return;
+      var f=RS.FLAGS.realism===0?0.6:RS.FLAGS.realism===2?1.25:1,nb=r.bodies.length,gore=opt('oGore');
+      if(g.type==='hammer'){
+        var sp=h.fp==='head'?h.sn:h.sn*0.5;if(sp<2.5)return;g.cd[key]=now;sfx('thud',sp+3);
+        r.painS=Math.min(2,(r.painS||0)+Math.min(0.6,sp*0.05));r.ev=r.ev||[];
+        if(gore){gL=layerK(r,k);addDecal(r,k,h.p,0.02+0.004*sp);}
+        if(k>=nb)return;
+        if(k===0){
+          if(sp>6*f&&RS.FLAGS.death!==0){if(!r.dead){r.dead=true;r.ev.push({t:'crush',k:0,d:sp});}}
+          else if(sp>3.5*f&&!r.dead){r.koT=Math.max(r.koT||0,4+sp*0.5);r.koWhy='head';sfx('crunch',false);}
+          return;
+        }
+        if(k>=4){var j=k-1;if(!r.inj||r.inj.gone[j])return;f*=[1,0.9,0.8,1.5,1.15,0.9][(k-4)%6]; // the thigh bone takes the most
+          if(sp>8*f){r.ev.push({t:'crush',k:j,d:sp});if(RS.FLAGS.shatter&&RS.FLAGS.sever)RS.shatter(r,j,sp>13*f);else RS.breakBone(r,j,true);}
+          else if(sp>3*f&&!r.inj.broken[j]){RS.breakBone(r,j,true);}
+          return;
+        }
+        // torso: knocked down; hard enough breaks ribs/spine and bleeds inside (stays down)
+        if(sp>4*f&&!r.dead){var lp=r.bodies[k].getLocalPoint(h.p),bad=sp>7*f;
+          if(bad){if(k<3)RS.breakBone(r,k,true);if(RS.FLAGS.bleed)r.holes=(r.holes||0)+1.5;sfx('crunch',true);}
+          RS.shot(r,k,lp.x,lp.y,h.d.x,bad);}
+      }else{ // knife: only the blade cuts
+        if(h.fp!=='blade'||h.st<2)return;g.cd[key]=now;
+        var slash=h.st>1.6*h.sn;
+        wound(r,k,h.p,h.d,{cut:1,s:h.st,slash:slash});
+        if(k>=4&&k<nb&&h.st>7*f&&RS.FLAGS.sever&&gore){var jj=k-1,ty=(k-4)%6;if(ty===2||ty===5||ty===1||ty===4){if(r.inj&&!r.inj.gone[jj])RS.sever(r,jj);}} // a hard chop takes off a hand, foot, forearm or shin
+      }
+    });
   }
   function partHit(b){ // which human (and which part index, chunks after the body list) a body belongs to
     for(var i=0;i<rigs.length;i++){var r=rigs[i],k=r.bodies.indexOf(b);if(k>=0)return {r:r,k:k};
@@ -1557,18 +1614,24 @@ var RS=(function(){
     var hb=best.f.getBody();
     if(hb.isDynamic())hb.applyLinearImpulse(Vec2(d.x*0.16,d.y*0.16),hp,true); // a 9 mm round's momentum (scaled up a bit so you see it)
     var H=partHit(hb);if(!H)return;
-    var r=H.r,k=H.k,gore=opt('oGore');
+    wound(H.r,H.k,hp,d,{gun:1});
+  }
+  // WOUND: a bullet (o.gun) or a blade (o.cut, o.s = speed) going into part k of rig r at world point hp, direction d
+  function wound(r,k,hp,d,o){
+    var gore=opt('oGore'),gun=!!o.gun,cut=!!o.cut;
     var nb=r.bodies.length,ext=k>=4&&k<nb&&((k-4)%6===2||(k-4)%6===5); // hand or foot
     sfx('squelch');r.painS=Math.min(2,(r.painS||0)+(ext?0.25:0.35));
+    var sc=cut?0.7:1; // a stab bleeds a bit less than a bullet
     var lp=partOf(r,k).getLocalPoint(hp);
     if(gore){
-      gL=layerK(r,k);gush(hp.x,hp.y,-d.x*0.6,-d.y*0.6,14,1.2,0.6);gush(hp.x,hp.y,d.x*2.5,d.y*2.5,30,2.4,0.5); // entry splash, exit spray
+      gL=layerK(r,k);gush(hp.x,hp.y,-d.x*0.6,-d.y*0.6,14,1.2,0.6);if(gun)gush(hp.x,hp.y,d.x*2.5,d.y*2.5,30,2.4,0.5);else gush(hp.x,hp.y,d.x*0.8,d.y*0.8,22,1.6,0.6); // entry splash, exit spray
       addDecal(r,k,hp,0.03);splats(r,k,2,0.02);
       var H2=r.holeK||(r.holeK={}),HL=H2[k]||(H2[k]=[]),pb2=partOf(r,k),jag=function(){var a=[];for(var q=0;q<10;q++)a.push(0.7+Math.random()*0.6);return a;};
-      HL.push({x:lp.x,y:lp.y,r:0.017+Math.random()*0.004,j:jag(),a:Math.random()*6.28});
+      if(cut){var dl=pb2.getLocalVector(d);HL.push({x:lp.x,y:lp.y,r:0.012+Math.random()*0.004,j:jag(),a:0,cut:1,ca:Math.atan2(dl.y,dl.x)+Math.PI/2+(Math.random()-0.5)*0.6,len:o.slash?2.6:1.6});}
+      else HL.push({x:lp.x,y:lp.y,r:0.017+Math.random()*0.004,j:jag(),a:Math.random()*6.28});
       // exit wound: walk along the shot until it leaves this part; bigger and more torn than the way in
       var fx2=null;for(var f2=pb2.getFixtureList();f2;f2=f2.getNext())if(f2.testPoint(Vec2(hp.x+d.x*0.004,hp.y+d.y*0.004))){fx2=f2;break;}
-      if(fx2){var ex=hp.x,ey=hp.y;for(var st=0;st<80;st++){var nx=ex+d.x*0.004,ny=ey+d.y*0.004;if(!fx2.testPoint(Vec2(nx,ny)))break;ex=nx;ey=ny;}
+      if(gun&&fx2){var ex=hp.x,ey=hp.y;for(var st=0;st<80;st++){var nx=ex+d.x*0.004,ny=ey+d.y*0.004;if(!fx2.testPoint(Vec2(nx,ny)))break;ex=nx;ey=ny;}
         var le=pb2.getLocalPoint(Vec2(ex,ey));HL.push({x:le.x,y:le.y,r:0.023+Math.random()*0.006,j:jag(),a:Math.random()*6.28,exit:1});addDecal(r,k,Vec2(ex,ey),0.04);}
       (r.hole||(r.hole=[])).push({k:k,x:lp.x,y:lp.y});
     }
@@ -1577,19 +1640,27 @@ var RS=(function(){
     if(heart&&!r.heart){r.heart={x:lp.x,y:lp.y};if(gore){gL=layerK(r,k);gush(hp.x,hp.y,-d.x*1.5,-d.y*1.5,60,2.6,0.8);}}
     var leg=k>=4&&k<nb&&((k-4)%6===3||(k-4)%6===4),thigh=k>=4&&k<nb&&(k-4)%6===3;
     var hw=ext?0.35:heart?10:k===1?5:k===2?3.2:k===3?2.4:thigh?2.2:1; // the thigh has the femoral artery // x0.25 = bleed weight (a torn-off leg is 1)
-    if(RS.FLAGS.bleed)r.holes=(r.holes||0)+hw;
-    if(k===0&&RS.FLAGS.death!==0&&!r.dead){r.dead=true;r.ev=r.ev||[];}
-    else if(k>=4&&k<nb&&!ext&&r.inj){var j=k-1;var pb=RS.FLAGS.realism===0?0.8:RS.FLAGS.realism===2?0.35:0.5;
+    if(RS.FLAGS.bleed)r.holes=(r.holes||0)+hw*sc;
+    if(k===0&&RS.FLAGS.death!==0&&!r.dead&&(gun||o.s>5)){r.dead=true;r.ev=r.ev||[];} // a knife to the head kills only when driven in hard
+    else if(gun&&k>=4&&k<nb&&!ext&&r.inj){var j=k-1;var pb=RS.FLAGS.realism===0?0.8:RS.FLAGS.realism===2?0.35:0.5;
       if(!r.inj.broken[j]&&!r.inj.gone[j]&&Math.random()<pb)RS.breakBone(r,j,true);}
     if(k<nb&&!r.dead)RS.shot(r,k,lp.x,lp.y,d.x,k>=1&&k<=3||leg);
-    if(k<nb){ // knocked back: the whole body gets shoved along the shot, hardest at the part that was hit (hands/feet: just that limb)
+    if(gun&&k<nb){ // knocked back: the whole body gets shoved along the shot, hardest at the part that was hit (hands/feet: just that limb)
       var kv=ext?0:k===0?1.6:k<4?2.2:1.4,kx=d.x,ky=Math.max(-0.3,d.y)+0.15;
       r.bodies.forEach(function(bq,q){var w2=q===k?2.2:kv;if(ext&&Math.abs(q-k)>1)return;if(ext)w2=q===k?2:1;var v=bq.getLinearVelocity();bq.setLinearVelocity(Vec2(v.x+kx*w2,v.y+ky*w2*0.5));bq.setAwake(true);});
     }
-  }
+    }
   function drawItems(){
     items.forEach(function(g){
-      var b=g.b;ctx.beginPath();
+      var b=g.b;
+      if(g.type!=='gun'){ // each fixture its own colour: wood handle, steel head / blade
+        for(var f0=b.getFixtureList();f0;f0=f0.getNext()){var vs0=f0.getShape().m_vertices,pt=(f0.getUserData()||{}).part;ctx.beginPath();
+          for(var i0=0;i0<vs0.length;i0++){var q0=toScreen(b.getWorldPoint(vs0[i0]));if(i0)ctx.lineTo(q0.x,q0.y);else ctx.moveTo(q0.x,q0.y);}ctx.closePath();
+          ctx.fillStyle=pt==='handle'?(g.type==='knife'?'#2a2622':'#6b4a2c'):pt==='blade'?'#a9b0b6':'#5b5e62';ctx.fill();ctx.strokeStyle='#100e0c';ctx.lineWidth=Math.max(1,0.005*cam.z);ctx.stroke();}
+        if(g.type==='knife'){var e1=toScreen(b.getWorldPoint(Vec2(0.005,-0.01))),e2=toScreen(b.getWorldPoint(Vec2(0.13,-0.005)));ctx.strokeStyle='rgba(230,240,250,0.8)';ctx.lineWidth=Math.max(1,0.003*cam.z);ctx.beginPath();ctx.moveTo(e1.x,e1.y);ctx.lineTo(e2.x,e2.y);ctx.stroke();}
+        return;
+      }
+      ctx.beginPath();
       for(var f=b.getFixtureList();f;f=f.getNext()){var vs=f.getShape().m_vertices;for(var i=0;i<vs.length;i++){var q=toScreen(b.getWorldPoint(vs[i]));if(i)ctx.lineTo(q.x,q.y);else ctx.moveTo(q.x,q.y);}ctx.closePath();}
       ctx.fillStyle='#4a4741';ctx.fill();ctx.strokeStyle='#14120f';ctx.lineWidth=Math.max(1,0.006*cam.z);ctx.stroke();
       var s1=toScreen(b.getWorldPoint(Vec2(-0.07,0.028*g.s))),s2=toScreen(b.getWorldPoint(Vec2(0.1,0.028*g.s))); // slide highlight
@@ -1702,7 +1773,7 @@ var RS=(function(){
     clearTimeout(holdT);
     if(trig&&trig.id===e.pointerId){var tq=ptrs[e.pointerId],tg=trig.g;if(tq)aimAt(tg,toWorld(tq.x,tq.y));tg.b.setTransform(tg.b.getPosition(),tg.aim);tg.b.setAngularVelocity(0);fire(tg);trig=null;delete ptrs[e.pointerId];return;}
     if(tap&&tap.id===e.pointerId){var q=ptrs[e.pointerId];
-      if(q&&performance.now()-tap.t<350&&Math.hypot(q.x-tap.x,q.y-tap.y)<12)items.forEach(function(g){if(g.b===tap.b)fire(g);});tap=null;}
+      if(q&&performance.now()-tap.t<350&&Math.hypot(q.x-tap.x,q.y-tap.y)<12)items.forEach(function(g){if(g.b===tap.b&&g.type==='gun')fire(g);});tap=null;}
     delete ptrs[e.pointerId];
     var k=ids();
     if(k.length===0){mode='none';drag=null;pan=null;pinch=null;}
@@ -1718,6 +1789,8 @@ var RS=(function(){
   document.getElementById('bSpawn').onclick=function(){var m=$('spmenu');m.hidden=!m.hidden;};
   document.getElementById('spHuman').onclick=function(){$('spmenu').hidden=true;spawn('stand');};
   document.getElementById('spGun').onclick=function(){$('spmenu').hidden=true;spawnGun();};
+  document.getElementById('spHammer').onclick=function(){$('spmenu').hidden=true;spawnHammer();};
+  document.getElementById('spKnife').onclick=function(){$('spmenu').hidden=true;spawnKnife();};
   document.getElementById('bReset').onclick=document.getElementById('bReset2').onclick=function(){init();pauseMenu(false);};
   var userPaused=false,MAXR=Infinity; // no cap on people
   function setOn(id,on){document.getElementById(id).classList.toggle('on',!!on);}
@@ -2141,6 +2214,9 @@ var RS=(function(){
     function blob(p,rr,h,sc){ctx.beginPath();for(var q=0;q<10;q++){var t=h.a+an*0+q*0.628,m=rr*(1+(h.j[q]-1)*sc);var x=p.x+Math.cos(t)*m,y=p.y+Math.sin(t)*m;if(q)ctx.lineTo(x,y);else ctx.moveTo(x,y);}ctx.closePath();ctx.fill();}
     for(var i=0;i<A.length;i++){var h=A[i],p=toScreen(b.getWorldPoint(Vec2(h.x,h.y))),rr=Math.max(h.exit?4.5:3.5,h.r*z),e=h.exit?1.6:1;
       if(!h.j){h.j=[1,1,1,1,1,1,1,1,1,1];h.a=0;}
+      if(h.cut){ctx.save();ctx.translate(p.x,p.y);ctx.rotate(-(an+h.ca));var L=rr*h.len*1.6; // a slit: red lips around a dark gash
+        ctx.fillStyle=far?'#6a1414':'#a82219';ctx.beginPath();ctx.ellipse(0,0,L,rr*0.75,0,0,7);ctx.fill();
+        ctx.fillStyle='#120303';ctx.beginPath();ctx.ellipse(0,0,L*0.85,rr*0.28,0,0,7);ctx.fill();ctx.restore();continue;}
       ctx.fillStyle=far?'rgba(40,10,30,0.35)':'rgba(70,20,50,0.35)';ctx.beginPath();ctx.arc(p.x,p.y,rr*2.6,0,7);ctx.fill(); // bruise
       ctx.fillStyle=far?'#5a0f0f':'#8e1a16';blob(p,rr*1.7,h,0.8*e); // torn flesh
       ctx.fillStyle=far?'#7a1a14':'#b8281e';blob(p,rr*1.25,h,0.6*e); // wet red edge
@@ -2324,7 +2400,7 @@ var RS=(function(){
       while(acc>=DT){
         if((use||reflex)&&stepCount%SUB===0)for(i=0;i<rigs.length;i++)RS.act(rigs[i],use?ES.theta:ZERO_TH,liveBufs[i],liveRng,{delay:1,noise:0.005,reflex:reflex}); // reflexes run even when the policy is off (untrained = zero weights)
         if(pd)for(i=0;i<rigs.length;i++)RS.pdRig(rigs[i]);
-        applyDrag();world.step(DT,RS.VEL_IT,RS.POS_IT);acc-=DT;stepCount++;
+        applyDrag();world.step(DT,RS.VEL_IT,RS.POS_IT);meleeStep();acc-=DT;stepCount++;
       }
     }
     if(camFollow&&rigs.indexOf(camFollow)<0)camFollow=null;
