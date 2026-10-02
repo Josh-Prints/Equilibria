@@ -435,12 +435,14 @@ var RS=(function(){
   // GET UP (FLAGS.getup): when the detector says "down" and the body has settled, get up the way people do.
   //  on the back: rock up to sitting with a leg swing -> tuck the feet in and fold forward over them -> crouch on the
   //  feet -> stand, then hand back to balance once the knees are nearly straight (easing into its targets, no snap).
-  //  face down: push up, tip over forward into a sit, then the same sit -> crouch -> stand moves as on the back.
+  //  face down: push up -> hands and knees -> one foot forward into a lunge -> push up off the front foot -> stand.
+  //  Each stage moves one side 0.3 s after the other, so hands and knees move one at a time.
   // Stages blend toward a target pose; some hold the trunk at a set angle in WORLD frame with the hips (so it adapts
   // to how it is lying). Stages were found by evolution strategies in the sim (one move at a time: sit, crouch, stand).
   // If it slumps back down or is still low at the end, it starts over once it settles.
   // Stage poses are channels: neck, upper spine, lower spine, shoulder, elbow, wrist, hip, knee, ankle (both sides);
-  // n = extra [hip, knee, ankle] for the near leg only (one foot forward); trunk = wanted pelvis angle in world frame
+  // n = extra [hip, knee, ankle] for the near leg, m = extra [shoulder, elbow, wrist] for the near arm, lag = seconds one
+  // side trails the other (so hands and knees move one at a time); trunk = wanted pelvis angle in world frame
   // (held with the hips, weight tw) or null; T = seconds to blend into the pose. Poses were optimised in the sim.
   // =====================================================================
   // Getting up needs more forward bend than the normal limits allow (to get the weight over the feet from sitting),
@@ -457,29 +459,25 @@ var RS=(function(){
   }
   var GU={
     prone:[
-      {T:1.14,a:[-0.07,-0.11,0.71,0.52,1.59,0.77,0.33,0.17,-0.02],n:[0.18,-0.06,0.54],trunk:null,tw:0},
-      {T:0.52,a:[0.9,0.61,0.62,1.43,-0.56,0.28,1.22,-1.76,0.83],n:[-0.23,0.44,0.31],trunk:-0.22,tw:1.02},
-      {T:0.76,a:[-0.61,-0.66,-0.21,2.12,0.12,0.11,2.8,-1.99,0],n:[0.29,-0.13,0.24],trunk:-0.25,tw:0.25},
-      {T:1.15,a:[-0.05,-0.31,-0.47,2.64,-0.22,0.45,1.91,-0.96,-0.83],n:[0.17,-0.41,0.18],trunk:0.18,tw:0.17},
-      {T:0.93,a:[-0.33,-0.1,-0.78,1.4,0.55,-0.16,2.1,-1.39,0.47],n:[0.07,-0.23,0.18],trunk:-0.28,tw:0.16},
-      {T:1.63,a:[0.39,-1.03,-0.2,1.57,0.03,-0.39,2.35,-1.25,0.97],n:[-0.25,-0.14,-0.2],trunk:0.42,tw:0.93},
-      {T:0.42,a:[-0.58,-0.89,-0.33,1.78,-0.05,0.16,3.06,-2.24,0.43],n:[-0.04,0.07,0.19],trunk:-0.16,tw:1.08},
-      {T:0.41,a:[0.03,-0.49,-0.17,1.41,0.01,-0.07,3.47,-2.31,1.02],n:[-0.17,-0.34,0.25],trunk:-1.21,tw:1.5},
-      {T:0.41,a:[-0.07,-0.08,-1.15,1.95,0.09,-0.05,1.47,-2.86,0.8],n:[-0.05,-0.15,0.37],trunk:-0.45,tw:1.33},
-      {T:0.59,a:[0.22,-0.2,0.44,0.98,0.25,0.28,1.3,-1.2,0.17],n:[-0.56,-0.45,0.24],trunk:-0.32,tw:1.05},
-      {T:1,a:[-0.36,0.13,0.01,0.35,0.59,-0.48,0.74,-0.72,0.1],n:[-0.59,0.02,0.25],trunk:0.02,tw:1.13},
-      {T:0.64,a:[-0.11,0.04,-0.02,0.06,0.26,0.14,-0.05,0.18,0],n:[0.22,0.02,0.21],trunk:0.07,tw:1.02}
+      {T:0.42,a:[0.08,0.92,0.79,0.66,1.74,0.61,-0.04,-0.15,0.29],n:[0.04,0.16,0.33],trunk:null,tw:0,lag:0.34,m:[-0.33,-0.05,-0.22]},
+      {T:0.43,a:[1.32,0.93,-0.18,1.2,-0.22,-0.21,1.84,-2.02,0.72],n:[-0.16,-0.29,0.09],trunk:0.32,tw:0.13,lag:-0.42,m:[0.07,0.16,0.27]},
+      {T:0.43,a:[0.42,0.05,-0.21,1.67,-0.14,0.45,1.7,-1.68,0.51],n:[1.58,-0.4,-0.11],trunk:null,tw:0,lag:0.3,m:[-0.04,0.34,-0.13]},
+      {T:1.06,a:[0.06,0.48,-0.07,1.18,0.07,0.14,0.93,-1.47,0.55],n:[0.96,0.3,-0.5],trunk:-0.76,tw:1.03,lag:-0.31,m:[-0.23,-0.35,-0.14]},
+      {T:0.91,a:[0.43,-0.2,-0.13,0.56,0.56,0.15,0.68,-1.35,0.14],n:[0.91,0.6,-0.27],trunk:-0.36,tw:0.94,lag:0.43,m:[0.11,-0.04,0.3]},
+      {T:0.65,a:[-0.19,0.29,0.29,0.41,0.39,-0.09,0.17,-0.63,0.14],n:[0.87,0.13,-0.05],trunk:-0.37,tw:1.08,lag:0.3,m:[-0.25,0.32,0.08]},
+      {T:0.84,a:[-0.01,0.26,0,0.44,0.23,0.22,0.05,-0.45,-0.02],n:[0.32,0.05,-0.12],trunk:0.05,tw:0.93,lag:-0.41,m:[0.01,0.18,0.19]},
+      {T:0.95,a:[0.03,0.02,-0.02,0.24,0.36,0.2,0.04,-0.03,0],n:[0.04,0.16,-0.15],trunk:0.06,tw:1.1,lag:0.56,m:[-0.29,0.17,0.2]}
     ],
     supine:[
-      {T:0.44,a:[-0.22,0.15,0.1,2.08,0.13,0.05,1.17,-1.7,-0.59],n:[0.21,-0.23,-0.41],trunk:null,tw:0},
-      {T:0.61,a:[-0.41,-0.2,-0.38,0.98,0.04,-0.31,0.82,-0.81,0.06],n:[-0.38,0.85,0.04],trunk:null,tw:0},
-      {T:1.32,a:[0.02,-0.58,-0.31,1.56,0.06,-0.12,2.05,-1.31,0.53],n:[0,0.06,0.01],trunk:0.23,tw:0.86},
-      {T:0.42,a:[-0.58,-0.89,-0.33,1.78,-0.05,0.16,3.06,-2.24,0.43],n:[-0.04,0.07,0.19],trunk:-0.16,tw:1.08},
-      {T:0.41,a:[0.03,-0.49,-0.17,1.41,0.01,-0.07,3.47,-2.31,1.02],n:[-0.17,-0.34,0.25],trunk:-1.21,tw:1.5},
-      {T:0.41,a:[-0.07,-0.08,-1.15,1.95,0.09,-0.05,1.47,-2.86,0.8],n:[-0.05,-0.15,0.37],trunk:-0.45,tw:1.33},
-      {T:0.59,a:[0.22,-0.2,0.44,0.98,0.25,0.28,1.3,-1.2,0.17],n:[-0.56,-0.45,0.24],trunk:-0.32,tw:1.05},
-      {T:1,a:[-0.36,0.13,0.01,0.35,0.59,-0.48,0.74,-0.72,0.1],n:[-0.59,0.02,0.25],trunk:0.02,tw:1.13},
-      {T:0.64,a:[-0.11,0.04,-0.02,0.06,0.26,0.14,-0.05,0.18,0],n:[0.22,0.02,0.21],trunk:0.07,tw:1.02}
+      {T:0.41,a:[-0.41,0.08,0,1.99,0.04,0.04,0.91,-1.6,-0.69],n:[0.03,-0.39,-0.58],trunk:null,tw:0,lag:0.31,m:[0.11,0.03,0.05]},
+      {T:0.46,a:[-0.45,-0.35,-0.28,0.81,-0.08,-0.41,0.91,-0.85,-0.05],n:[-0.38,0.55,-0.16],trunk:null,tw:0,lag:-0.34,m:[0.34,-0.01,-0.2]},
+      {T:1.26,a:[0.26,-0.62,-0.48,1.64,-0.09,-0.01,2.06,-1.39,0.66],n:[0.17,-0.08,-0.13],trunk:0.14,tw:0.98,lag:0.31,m:[-0.02,0.24,-0.12]},
+      {T:0.42,a:[-0.75,-1.05,-0.29,1.97,0.15,0.24,3.1,-2.35,0.35],n:[0,0.11,0.2],trunk:-0.36,tw:0.96,lag:-0.32,m:[-0.32,-0.02,-0.17]},
+      {T:0.41,a:[0.02,-0.15,-0.22,1.26,0,0.08,3.54,-2.49,0.85],n:[-0.06,-0.56,0.3],trunk:-1.52,tw:1.5,lag:0.3,m:[0.08,0.08,0.05]},
+      {T:0.41,a:[-0.15,-0.01,-0.89,1.91,-0.1,-0.05,1.82,-2.81,0.84],n:[0,-0.02,0.2],trunk:-0.49,tw:1.42,lag:-0.3,m:[0.17,-0.06,-0.01]},
+      {T:0.61,a:[0.25,-0.11,0.2,0.8,0.33,0.36,1.35,-1.03,0.26],n:[-0.68,-0.57,0.22],trunk:-0.21,tw:1.08,lag:0.33,m:[-0.17,0.01,0.05]},
+      {T:1.22,a:[-0.4,0.28,-0.06,0.34,0.4,-0.45,0.89,-0.73,0.04],n:[-0.42,0.04,0.25],trunk:0.02,tw:1.09,lag:-0.32,m:[-0.12,-0.06,0.12]},
+      {T:0.84,a:[-0.2,0.07,0.1,0.01,0.25,0.46,0.15,0.14,0],n:[0.14,-0.17,0.08],trunk:0.06,tw:1.06,lag:0.34,m:[0,0.07,-0.01]}
     ]};
   function getUp(rig,tt,dt){
     var g=rig.gu,ps=rig.parts,hy=ps[0].getPosition().y,pa=wrap(ps[3].getAngle()),k;
@@ -493,17 +491,19 @@ var RS=(function(){
       g.ph=-1;g.tries=0;rig.age=Math.min(rig.age,0.3);return false; // up on its feet: balance takes over, easing into its targets (no snap)
     }
     var S=GU[g.seq],st=S[g.ph];g.t+=dt;
-    var u=Math.min(1,g.t/st.T),sm=u*u*(3-2*u);
-    for(k=0;k<NJ;k++){
-      var c=k<3?k:3+((k-3)%6),v=st.a[c];if(st.n&&k>=12)v+=st.n[k-12];
-      tt[k]=g.base[k]=g.from[k]+(v-g.from[k])*sm;
+    var lag=st.lag||0,sm=0;
+    for(k=0;k<NJ;k++){ // one side moves a beat after the other (lag > 0: far side late, < 0: near side late)
+      var late=k>=3&&(lag>0?k<9:k>=9),u=Math.min(1,Math.max(0,(g.t-(late?Math.abs(lag):0))/st.T)),s1=u*u*(3-2*u);
+      if(!late)sm=s1;
+      var c=k<3?k:3+((k-3)%6),v=st.a[c];if(st.n&&k>=12)v+=st.n[k-12];if(st.m&&k>=9&&k<12)v+=st.m[k-9];
+      tt[k]=g.base[k]=g.from[k]+(v-g.from[k])*s1;
     }
     if(st.trunk!=null){ // hips hold the pelvis at the wanted world angle (both legs that are on the ground)
       var pw=ps[3].getAngularVelocity(),corr=clampA(1.2*(pa-st.trunk)+0.03*pw,0.8)*sm*(st.tw==null?1:st.tw);
       tt[6]+=corr;tt[12]+=corr;
     }
     for(k=0;k<NJ;k++){rig.rs[k]=1;rig.stiff[k]=(JT[k].g===2&&(k%6)!==5)?FLAGS.guArm:1;} // arms push harder while getting up
-    if(g.t>=st.T+0.25){ // stage done: next one (or hand back once standing)
+    if(g.t>=st.T+Math.abs(st.lag||0)+0.25){ // stage done: next one (or hand back once standing)
       if(g.ph===S.length-1){g.ph=-1;if(hy<1.4){g.tries++;}else{g.tries=0;rig.age=Math.min(rig.age,0.3);}return hy>=1.4;}
       g.from=Float64Array.from(g.base);g.ph++;g.t=0;
     }
