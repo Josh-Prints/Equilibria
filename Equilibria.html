@@ -28,7 +28,9 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
 #bar button{min-width:44px;box-shadow:0 2px 0 #0006}#bar button.on{background:#c0392b}
 #hint{transition:opacity 1s}
 #hud{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:8px;display:flex;flex-direction:column;gap:4px;pointer-events:none;font:600 12px system-ui,Arial,sans-serif}
-.hc{background:var(--panel);border-radius:8px;padding:5px 8px;min-width:110px}
+.hc{background:var(--panel);border-radius:8px;padding:5px 8px;min-width:110px;pointer-events:auto;cursor:pointer}.hc:active{filter:brightness(1.4)}
+#rnIn{font:600 18px system-ui,Arial,sans-serif;padding:10px 12px;border-radius:10px;border:0;width:220px;background:#eef0f3;color:#111}
+.ov .row button{min-width:100px}
 .hb{height:6px;border-radius:3px;background:#0006;margin-top:4px;overflow:hidden}.hb i{display:block;height:100%;background:#d63031}
 #splash[hidden]{display:none}
 #splash{position:fixed;inset:0;background:radial-gradient(circle at 50% 40%,#3a4048,#1c1f23);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:10;text-align:center;padding:24px}
@@ -106,10 +108,16 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bDrop">&#x2B07;&#xFE0E; Drop</button>
   <button id="bFall">Fallen</button>
   <button id="bPause">Pause</button>
+  <button id="bReset2">Reset</button>
   <button id="bIn">+</button>
   <button id="bOut">&minus;</button>
 </div>
 <div id="hud"></div>
+<div id="rename" class="ov" hidden>
+  <h2>Name this human</h2>
+  <input id="rnIn" maxlength="16" placeholder="Name" autocomplete="off">
+  <div class="row"><button id="rnOk">Save</button><button id="rnCancel">Cancel</button></div>
+</div>
 <div id="pmenu" class="ov" hidden>
   <h2>Paused</h2>
   <button id="mResume">Resume</button>
@@ -1202,7 +1210,7 @@ var RS=(function(){
   // =====================================================================
   function init(){
     world=new planck.World({gravity:Vec2(0,-10)});
-    drag=null;group=0;rigs=[];parts=[];stains=[];
+    drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;
     ground=world.createBody();ground.createFixture(Box(1000,1,Vec2(0,-1),0),{friction:0.9});
     spawn('stand');
   }
@@ -1214,6 +1222,7 @@ var RS=(function(){
     RS.FLAGS.soft=opt('oSoft')?1:0;
     var rig=RS.buildRig(world,x,0,-(++group),o);
     if(kind==='drop'&&sc.vel)rig.parts.forEach(function(b){b.setLinearVelocity(Vec2(sc.vel.vx,sc.vel.vy));b.setAngularVelocity(sc.vel.w);});
+    rig.num=++humanN;
     rigs.push(rig);liveBufs.push(RS.newBuf());
     if(rigs.length>MAXR){var old=rigs.shift();liveBufs.shift();old.parts.forEach(function(b){world.destroyBody(b);});} // keep it fast on phones
   }
@@ -1265,7 +1274,9 @@ var RS=(function(){
     pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,z:cam.z,w:toWorld(mx,my)};
     mode='pinch';drag=null;
   }
+  var holdT=0;
   cv.addEventListener('pointerdown',function(e){
+    camT=null;
     e.preventDefault();
     try{cv.setPointerCapture(e.pointerId);}catch(_){}
     ptrs[e.pointerId]=pos(e);
@@ -1275,6 +1286,8 @@ var RS=(function(){
       var wp=toWorld(h.sx,h.sy);
       drag={body:h.b,local:h.b.getLocalPoint(wp),target:toWorld(p.x,p.y),mass:islandMass(h.b)};
       mode='drag';
+      var r0=rigOf(h.b),p0={x:p.x,y:p.y};clearTimeout(holdT);
+      holdT=setTimeout(function(){var q=ptrs[e.pointerId];if(r0&&mode==='drag'&&q&&Math.hypot(q.x-p0.x,q.y-p0.y)<10){drag=null;mode='none';openRename(r0);}},600);
     }else{mode='pan';pan={x:p.x,y:p.y};}
   });
   cv.addEventListener('pointermove',function(e){
@@ -1290,6 +1303,7 @@ var RS=(function(){
     else if(mode==='pan'&&pan){cam.x-=(p.x-pan.x)/cam.z;cam.y+=(p.y-pan.y)/cam.z;pan={x:p.x,y:p.y};}
   });
   function up(e){
+    clearTimeout(holdT);
     delete ptrs[e.pointerId];
     var k=ids();
     if(k.length===0){mode='none';drag=null;pan=null;pinch=null;}
@@ -1305,7 +1319,7 @@ var RS=(function(){
   document.getElementById('bSpawn').onclick=function(){spawn('stand');};
   document.getElementById('bDrop').onclick=function(){spawn('drop');};
   document.getElementById('bFall').onclick=function(){spawn('fallen');};
-  document.getElementById('bReset').onclick=function(){init();pauseMenu(false);};
+  document.getElementById('bReset').onclick=document.getElementById('bReset2').onclick=function(){init();pauseMenu(false);};
   var userPaused=false,MAXR=10;
   function setOn(id,on){document.getElementById(id).classList.toggle('on',!!on);}
   function $(id){return document.getElementById(id);}
@@ -1330,13 +1344,38 @@ var RS=(function(){
     var h=$('hint');h.style.opacity=0.7;setTimeout(function(){h.style.opacity=0;},7000);};
   syncMenu();
   // HUD: blood and state of each ragdoll (top right)
+  function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  var humanN=0,camT=null;
+  function rigByNum(n){for(var i=0;i<rigs.length;i++)if(rigs[i].num===n)return rigs[i];return null;}
+  document.getElementById('hud').addEventListener('click',function(e){ // tap a tab: pan the camera to that human
+    var c=e.target.closest('.hc');if(!c)return;var r=rigByNum(+c.dataset.n);if(!r)return;
+    var p=r.parts[1].getPosition();camT={x:p.x,y:p.y+0.3};
+  });
+  // hold on a human to rename them
+  var renaming=null;
+  function rigOf(b){for(var i=0;i<rigs.length;i++)if(rigs[i].parts.indexOf(b)>=0)return rigs[i];return null;}
+  function openRename(r){renaming=r;var o=document.getElementById('rename'),i=document.getElementById('rnIn');i.value=r.name||'';o.hidden=false;setTimeout(function(){i.focus();},50);}
+  function closeRename(save){var o=document.getElementById('rename');if(save&&renaming){var v=document.getElementById('rnIn').value.trim();renaming.name=v||null;}o.hidden=true;renaming=null;}
+  document.getElementById('rnOk').onclick=function(){closeRename(true);};
+  document.getElementById('rnCancel').onclick=function(){closeRename(false);};
+  document.getElementById('rnIn').addEventListener('keydown',function(e){if(e.key==='Enter')closeRename(true);});
+  // pixelated number painted on each chest (3x5 font)
+  var FONT={0:'111101101101111',1:'010110010010111',2:'111001111100111',3:'111001111001111',4:'101101111001001',5:'111100111001111',6:'111100111101111',7:'111001010010010',8:'111101111101111',9:'111101111001111'};
+  function drawNumber(r){
+    {
+      var b=r.parts[1],c=toScreen(b.getPosition()),t=String(r.num),px=0.024*cam.z,w=(t.length*4-1)*px,h=5*px;
+      ctx.save();ctx.translate(c.x,c.y);ctx.rotate(-b.getAngle());ctx.fillStyle='rgba(40,20,14,0.75)';
+      for(var d=0;d<t.length;d++){var g=FONT[t[d]];for(var q=0;q<15;q++)if(g[q]==='1')ctx.fillRect(-w/2+(d*4+q%3)*px,-h/2+(q/3|0)*px,Math.ceil(px),Math.ceil(px));}
+      ctx.restore();
+    }
+  }
   function hud(){
     var h=document.getElementById('hud'),html='';
-    rigs.slice(-4).forEach(function(r,i){
+    rigs.slice(-6).forEach(function(r,i){
       var bl=r.blood==null?1:r.blood,I=r.inj,nb=0,ng=0;
       if(I)for(var k=0;k<RS.NJ;k++){if(I.broken[k])nb++;if(I.gone[k]&&(k%3===0||!I.gone[k-1]))ng++;}
       var st=r.dead?'Dead':r.koT>0?'Knocked out':r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
-      html+='<div class="hc">#'+(rigs.indexOf(r)+1)+' '+st+(nb?' · '+nb+' broken':'')+(ng?' · '+ng+' lost':'')+'<div class="hb"><i style="width:'+Math.round(bl*100)+'%"></i></div></div>';
+      html+='<div class="hc" data-n="'+r.num+'">'+(r.name?esc(r.name):'#'+r.num)+' '+st+(nb?' · '+nb+' broken':'')+(ng?' · '+ng+' lost':'')+'<div class="hb"><i style="width:'+Math.round(bl*100)+'%"></i></div></div>';
     });
     if(h.innerHTML!==html)h.innerHTML=html;
   }
@@ -1524,6 +1563,7 @@ var RS=(function(){
         var c=mix(base,BLOOD,Math.min(0.85,(r.bl?r.bl[k]:0)*0.8));
         ctx.beginPath();polyPath(b,f.getShape());ctx.fillStyle=rgb(c,far?0.72:1);ctx.fill();ctx.fillStyle=worldPat(skinPattern(),64);ctx.fill();
         ctx.strokeStyle='#1b1b1d';ctx.lineWidth=Math.max(1,0.012*cam.z);ctx.stroke();
+        if(k===1)drawNumber(r); // under the near arm
       });
     });
   }
@@ -1548,14 +1588,9 @@ var RS=(function(){
     drawGround(gy);
     drawFlesh(true);if(opt('oBox')){ctx.globalAlpha=0.4;drawBodies(true);ctx.globalAlpha=1;}drawFlesh(false);if(opt('oBox'))drawBodies(false);
     drawBlood();
-    { // status above each head (and, with Show what it senses, what the network thinks is happening)
-      ctx.font='600 12px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
-      rigs.forEach(function(r){
-        var p=r.dp,b=0;for(var j=1;j<p.length;j++)if(p[j]>p[b])b=j;var gu=r.gu&&r.gu.ph>=0,cw=r.cowering,dd=r.dead||(r.ko?'knocked out':'');
-        var hp=toScreen(r.parts[0].getPosition());
-        var lab=dd?(r.dead?'dead':dd):cw?'in pain':gu?'getting up':'';
-        if(lab){ctx.globalAlpha=gu||cw||dd?1:0.5+0.5*p[b];ctx.fillText(lab,hp.x,hp.y-0.2*cam.z);ctx.globalAlpha=1;}
-      });
+    { // name above the head (only once you've named them)
+      ctx.font='600 13px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
+      rigs.forEach(function(r){if(!r.name)return;var hp=toScreen(r.parts[0].getPosition());ctx.fillText(r.name,hp.x,hp.y-0.2*cam.z);});
     }
     if(opt('oSkel')){
       ctx.lineWidth=3;ctx.strokeStyle='#e8590c';
@@ -1639,6 +1674,7 @@ var RS=(function(){
         applyDrag();world.step(DT,RS.VEL_IT,RS.POS_IT);acc-=DT;stepCount++;
       }
     }
+    if(camT){cam.x+=(camT.x-cam.x)*0.15;cam.y+=(camT.y-cam.y)*0.15;if(Math.abs(camT.x-cam.x)+Math.abs(camT.y-cam.y)<0.005)camT=null;}
     if(!paused)goreStep(Math.min(dt,0.05));
     draw();if(++injN%10===0){injSync();hud();}requestAnimationFrame(frame);
   }
