@@ -84,7 +84,7 @@
   }
 
   // training and Test use whichever reflexes are ticked (a policy learns to work together with them)
-  function reflexCfg(){return {noReflex:!opt('oReflex'),flags:{nn:opt('oNN')?1:0,getup:opt('oNN')&&opt('oGetup')?1:0,bal2:opt('oBal2')?1:0,step:opt('oStep')?1:0,air:opt('oFall')?1:0,land:opt('oFall')?1:0,fall:opt('oFall')?1:0,smooth:opt('oSmooth')?1:0,soft:opt('oSoft')?1:0}};}
+  function reflexCfg(){return {noReflex:!opt('oReflex'),flags:{nn:opt('oNN')?1:0,getup:opt('oNN')&&opt('oGetup')?1:0,cower:opt('oCower')?1:0,bal2:opt('oBal2')?1:0,step:opt('oStep')?1:0,air:opt('oFall')?1:0,land:opt('oFall')?1:0,fall:opt('oFall')?1:0,smooth:opt('oSmooth')?1:0,soft:opt('oSoft')?1:0}};}
   function reflexText(){return (opt('oReflex')?('balance'+(opt('oBal2')?' v2 + steps':(opt('oStep')?', step':''))+(opt('oFall')?', fall/landing':'')):'none')+(opt('oSmooth')?' · smooth reward':'')+(opt('oSoft')?' · soft start':'');}
   var training=false;
   function esGeneration(){
@@ -338,9 +338,9 @@
     if(opt('oNN')&&RS.hasDet()){ // what the network thinks is happening, above each head
       ctx.font='600 12px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.fillStyle=fg;
       rigs.forEach(function(r){
-        var p=r.dp,b=0;for(var j=1;j<p.length;j++)if(p[j]>p[b])b=j;var gu=r.gu&&r.gu.ph>=0;
+        var p=r.dp,b=0;for(var j=1;j<p.length;j++)if(p[j]>p[b])b=j;var gu=r.gu&&r.gu.ph>=0,cw=r.cowering;
         var hp=toScreen(r.parts[0].getPosition());
-        ctx.globalAlpha=gu?1:0.5+0.5*p[b];ctx.fillText(gu?'getting up':RS.DCLS[b]+' '+Math.round(p[b]*100)+'%',hp.x,hp.y-0.2*cam.z);ctx.globalAlpha=1;
+        ctx.globalAlpha=gu||cw?1:0.5+0.5*p[b];ctx.fillText(cw?'cowering':gu?'getting up':RS.DCLS[b]+' '+Math.round(p[b]*100)+'%',hp.x,hp.y-0.2*cam.z);ctx.globalAlpha=1;
       });
     }
     if(opt('oSkel')){
@@ -387,7 +387,7 @@
       acc+=dt;
       var use=opt('oUse'),pd=opt('oPD'),reflex=opt('oReflex'),i;
       RS.FLAGS.air=RS.FLAGS.land=RS.FLAGS.fall=opt('oFall')?1:0;
-      RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;
+      RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;RS.FLAGS.cower=opt('oCower')?1:0;
       while(acc>=DT){
         if((use||reflex)&&stepCount%SUB===0)for(i=0;i<rigs.length;i++)RS.act(rigs[i],use?ES.theta:ZERO_TH,liveBufs[i],liveRng,{delay:1,noise:0.005,reflex:reflex}); // reflexes run even when the policy is off (untrained = zero weights)
         if(pd)for(i=0;i<rigs.length;i++)RS.pdRig(rigs[i]);

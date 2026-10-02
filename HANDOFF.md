@@ -143,6 +143,9 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 ## Getting up (FLAGS.getup, page tick box "Get up when down")
 - Runs when the detector says "down" (dp[4] > 0.6) and the body has been still for 0.8 s; label above the head shows "getting up".
 - `GU.supine` (on the back): rock up to sitting with a leg swing, tuck the feet and fold forward, crouch on the feet, stand. Hands back to balance once standing with nearly straight knees, easing targets in via `rig.age` (snapping straight from a crouch launched it into the air).
-- `GU.prone` (face down) is empty for now: it stays down. Hand-made routes (hands and knees, kneel, half-kneel, pike) all failed; the rig can't get a foot under itself from kneeling (ankle ±0.7, no toes, arms ~12x weaker than legs). Next idea: forward roll from hands and knees into the sit, then reuse the supine tail.
+- `GU.prone` (face down): push up, tip over forward into a sit (found with a 'sit' goal), then reuse the supine stages from the sit onward. 20/20 in sim, ~11 s. Hand-made routes via kneeling all failed: the rig can't get a foot under itself from kneeling (ankle ±0.7, no toes, arms ~12x weaker than legs).
 - While getting up only, hip flexion is allowed to 2.8 (normally 2.4) and spine curl to chest -0.8 / abd -0.4 -> -0.6 (normally -0.5 / -0.4) via `guLimits`; normal limits come back once the joints are inside them again.
 - Stages were found with ES in the sim, one move at a time with goal scores (sit, then crouch over the feet, then stand). Supine: 20/20 held-out starts end standing (~6.7 s). Push/drop survival unchanged with it off; drop 20 -> 23/40 with it on.
+
+## Cower (FLAGS.cower, tick box "Cower after hard hits")
+- If head, chest or pelvis changes velocity by more than `cowerImp` (3.5 m/s) in one tick while touching the ground, it curls up with its arms over its head for 1.5-3.5 s (longer for harder hits), trembling slightly, then eases out (`rig.age=0`) and gets up. Button pushes don't count (chest not on the ground). Measured: toppling from a 2.6+ shove backward or 5 forward, or landing flat from 3 m, triggers it; a 1 m flat drop doesn't.

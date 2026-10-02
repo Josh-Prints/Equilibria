@@ -1,7 +1,7 @@
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -435,7 +435,7 @@ var RS=(function(){
   // GET UP (FLAGS.getup): when the detector says "down" and the body has settled, get up the way people do.
   //  on the back: rock up to sitting with a leg swing -> tuck the feet in and fold forward over them -> crouch on the
   //  feet -> stand, then hand back to balance once the knees are nearly straight (easing into its targets, no snap).
-  //  face down: no sequence yet (prone is empty, so it stays down).
+  //  face down: push up, tip over forward into a sit, then the same sit -> crouch -> stand moves as on the back.
   // Stages blend toward a target pose; some hold the trunk at a set angle in WORLD frame with the hips (so it adapts
   // to how it is lying). Stages were found by evolution strategies in the sim (one move at a time: sit, crouch, stand).
   // If it slumps back down or is still low at the end, it starts over once it settles.
@@ -457,7 +457,18 @@ var RS=(function(){
   }
   var GU={
     prone:[
-
+      {T:1.14,a:[-0.07,-0.11,0.71,0.52,1.59,0.77,0.33,0.17,-0.02],n:[0.18,-0.06,0.54],trunk:null,tw:0},
+      {T:0.52,a:[0.9,0.61,0.62,1.43,-0.56,0.28,1.22,-1.76,0.83],n:[-0.23,0.44,0.31],trunk:-0.22,tw:1.02},
+      {T:0.76,a:[-0.61,-0.66,-0.21,2.12,0.12,0.11,2.8,-1.99,0],n:[0.29,-0.13,0.24],trunk:-0.25,tw:0.25},
+      {T:1.15,a:[-0.05,-0.31,-0.47,2.64,-0.22,0.45,1.91,-0.96,-0.83],n:[0.17,-0.41,0.18],trunk:0.18,tw:0.17},
+      {T:0.93,a:[-0.33,-0.1,-0.78,1.4,0.55,-0.16,2.1,-1.39,0.47],n:[0.07,-0.23,0.18],trunk:-0.28,tw:0.16},
+      {T:1.63,a:[0.39,-1.03,-0.2,1.57,0.03,-0.39,2.35,-1.25,0.97],n:[-0.25,-0.14,-0.2],trunk:0.42,tw:0.93},
+      {T:0.42,a:[-0.58,-0.89,-0.33,1.78,-0.05,0.16,3.06,-2.24,0.43],n:[-0.04,0.07,0.19],trunk:-0.16,tw:1.08},
+      {T:0.41,a:[0.03,-0.49,-0.17,1.41,0.01,-0.07,3.47,-2.31,1.02],n:[-0.17,-0.34,0.25],trunk:-1.21,tw:1.5},
+      {T:0.41,a:[-0.07,-0.08,-1.15,1.95,0.09,-0.05,1.47,-2.86,0.8],n:[-0.05,-0.15,0.37],trunk:-0.45,tw:1.33},
+      {T:0.59,a:[0.22,-0.2,0.44,0.98,0.25,0.28,1.3,-1.2,0.17],n:[-0.56,-0.45,0.24],trunk:-0.32,tw:1.05},
+      {T:1,a:[-0.36,0.13,0.01,0.35,0.59,-0.48,0.74,-0.72,0.1],n:[-0.59,0.02,0.25],trunk:0.02,tw:1.13},
+      {T:0.64,a:[-0.11,0.04,-0.02,0.06,0.26,0.14,-0.05,0.18,0],n:[0.22,0.02,0.21],trunk:0.07,tw:1.02}
     ],
     supine:[
       {T:0.44,a:[-0.22,0.15,0.1,2.08,0.13,0.05,1.17,-1.7,-0.59],n:[0.21,-0.23,-0.41],trunk:null,tw:0},
@@ -498,6 +509,32 @@ var RS=(function(){
     }
     g.peak=Math.max(g.peak,hy);
     if(hy<g.peak-0.5){g.ph=-1;g.tries++;} // slumped back down: start over once it settles
+    return true;
+  }
+
+  // COWER (FLAGS.cower): if the head, chest or pelvis hits the ground hard (velocity change in one tick while touching
+  // the ground above cowerImp m/s, e.g. toppling over from a big shove or landing flat from high up), curl up and cover
+  // the head for a moment (longer for harder hits), trembling a little, before trying to get up.
+  // Pushes from the buttons don't count: the chest isn't touching the ground when it's shoved.
+  var COWER=[-0.45,-0.5,-0.4, 2.3,2.4,0.6, 1.7,-2.3,0.3]; // chin tucked, back curled, arms folded over the head, knees up
+  function onGround(b){for(var c=b.getContactList();c;c=c.next)if(c.contact.isTouching()&&c.other.isStatic())return true;return false;}
+  function cower(rig,tt,dt){
+    var ps=rig.parts,ids=[0,1,3],imp=0,k;
+    if(!rig.cpv)rig.cpv=[0,0,0,0,0,0];
+    for(var q=0;q<3;q++){
+      var v=ps[ids[q]].getLinearVelocity();
+      if(onGround(ps[ids[q]]))imp=Math.max(imp,Math.hypot(v.x-rig.cpv[2*q],v.y-rig.cpv[2*q+1]));
+      rig.cpv[2*q]=v.x;rig.cpv[2*q+1]=v.y;
+    }
+    if(imp>FLAGS.cowerImp&&(rig.cowT||0)<0.5){rig.cowT=Math.min(3.5,1.5+0.6*(imp-FLAGS.cowerImp));rig.cowA=0;rig.gu.ph=-1;}
+    if(!(rig.cowT>0))return false;
+    rig.cowT-=dt;rig.cowA=(rig.cowA||0)+dt;
+    if(rig.cowT<=0)rig.age=0; // done: ease back into whatever comes next (no snap)
+    var tr=0.06*Math.min(1,rig.cowT)*Math.sin(rig.cowA*55); // a little shaking, fading out at the end
+    for(k=0;k<NJ;k++){
+      var c=k<3?k:3+((k-3)%6);tt[k]=COWER[c]+((c===3||c===4)?tr:0);
+      rig.rs[k]=rig.stiff[k]=0.75;
+    }
     return true;
   }
 
@@ -551,11 +588,12 @@ var RS=(function(){
       else if(k===0)t+=neck;else if(k===3||k===9)t+=sh;else if(k===4||k===10)t+=el;
       tt[k]=t;
     }
-    var gettingUp=rf&&FLAGS.getup&&getUp(rig,tt,dt);
+    var cowering=rf&&FLAGS.cower&&cower(rig,tt,dt);rig.cowering=!!cowering;
+    var gettingUp=!cowering&&rf&&FLAGS.getup&&getUp(rig,tt,dt);
     guLimits(rig,!!gettingUp);
-    rig.b2ok=!gettingUp&&rf&&FLAGS.bal2?bal2(rig,tt,out,ca,dt):false;
-    if(!gettingUp&&rf&&!FLAGS.bal2&&FLAGS.step)stepReflex(rig,tt,ca,dt);
-    if(!gettingUp&&rf&&FLAGS.nn)nnReact(rig,tt,dt);
+    rig.b2ok=!cowering&&!gettingUp&&rf&&FLAGS.bal2?bal2(rig,tt,out,ca,dt):false;
+    if(!cowering&&!gettingUp&&rf&&!FLAGS.bal2&&FLAGS.step)stepReflex(rig,tt,ca,dt);
+    if(!cowering&&!gettingUp&&rf&&FLAGS.nn)nnReact(rig,tt,dt);
     // target smoothing: the network can slow it down (smoother) or speed it up; soft start eases in after spawning
     var al=clampA(FILT*(1+0.6*out[O_FILT]),1);
     if(rig.age<FLAGS.softT){var x=rig.age/FLAGS.softT;al*=0.04+0.96*x*x*(3-2*x);}
