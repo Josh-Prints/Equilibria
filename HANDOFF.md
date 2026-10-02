@@ -239,3 +239,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.7
 - Whole game themed to match the menus: near-black backdrop, faint amber grid, dark concrete floor with a thin amber line, full-screen scanline/vignette overlay (body::after, z 5, under the menus), Teko uppercase bar and hold-menu buttons with amber press state, mono-font HUD cards with an amber edge, rename overlay uses the menu style. Spawn button lost its emoji so the bar fits.
+
+## v0.2.8
+- HUD: up to 5 humans show a tab each (all of them, no longer only the last 6); with more than 5 the tabs collapse into one "N humans ▼" tab that opens #hlist, a full-screen menu-style list of every human. Tapping a card there pans to that human and closes the list.

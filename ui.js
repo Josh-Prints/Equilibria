@@ -343,10 +343,14 @@
   function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   var humanN=0,camT=null,camFollow=null;
   function rigByNum(n){for(var i=0;i<rigs.length;i++)if(rigs[i].num===n)return rigs[i];return null;}
-  document.getElementById('hud').addEventListener('click',function(e){ // tap a tab: pan the camera to that human
+  function tabTap(e){ // tap a tab: pan the camera to that human (the drop-down tab opens the full list instead)
+    if(e.target.closest('.hdd')){$('hlist').hidden=false;hud();return;}
     var c=e.target.closest('.hc');if(!c)return;var r=rigByNum(+c.dataset.n);if(!r)return;
-    var p=r.bodies[1].getPosition();camT={x:p.x,y:p.y+0.3};
-  });
+    var p=r.bodies[1].getPosition();camT={x:p.x,y:p.y+0.3};$('hlist').hidden=true;
+  }
+  document.getElementById('hud').addEventListener('click',tabTap);
+  document.getElementById('hlc').addEventListener('click',tabTap);
+  document.getElementById('hlClose').onclick=function(){$('hlist').hidden=true;};
   // hold on a human to rename them
   var renaming=null;
   function rigOf(b){for(var i=0;i<rigs.length;i++)if(rigs[i].bodies.indexOf(b)>=0)return rigs[i];return null;}
@@ -395,13 +399,19 @@
     }
   }
   function hud(){
-    var h=document.getElementById('hud'),html='';
-    rigs.slice(-6).forEach(function(r,i){
+    var h=document.getElementById('hud'),html='',many=rigs.length>5,L=$('hlist');
+    if(many)rigs.forEach(function(r){html+=card(r);});
+    function card(r){
       var bl=r.blood==null?1:r.blood,I=r.inj,nb=0,ng=0;
       if(I)for(var k=0;k<RS.NJ;k++){if(I.broken[k])nb++;if(I.gone[k]&&(k%3===0||!I.gone[k-1]))ng++;}
       var st=r.dead?'Dead':r.koT>0?(r.koWhy==='pain'?'Passed out':'Knocked out'):r.groggy>0?'Waking up':r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
-      html+='<div class="hc" data-n="'+r.num+'">'+(r.name?esc(r.name):'#'+r.num)+' '+st+(nb?' · '+nb+' broken':'')+(ng?' · '+ng+' lost':'')+'<div class="hb"><i style="width:'+Math.round(bl*100)+'%"></i></div></div>';
-    });
+      return '<div class="hc" data-n="'+r.num+'">'+(r.name?esc(r.name):'#'+r.num)+' '+st+(nb?' · '+nb+' broken':'')+(ng?' · '+ng+' lost':'')+'<div class="hb"><i style="width:'+Math.round(bl*100)+'%"></i></div></div>';
+    }
+    // up to 5 humans: a tab each; more than that: one drop-down tab that opens the full list
+    if(many){var dead=0;rigs.forEach(function(r){if(r.dead)dead++;});
+      var lc=$('hlc');if(!L.hidden&&lc.innerHTML!==html)lc.innerHTML=html;
+      html='<div class="hc hdd">'+rigs.length+' humans'+(dead?' · '+dead+' dead':'')+' <span class="dda">&#9660;</span></div>';}
+    else{if(!L.hidden)L.hidden=true;html='';rigs.forEach(function(r){html+=card(r);});}
     if(h.innerHTML!==html)h.innerHTML=html;
   }
   document.getElementById('bIn').onclick=function(){setZoom(cam.z*1.4,W/2,H/2);};
