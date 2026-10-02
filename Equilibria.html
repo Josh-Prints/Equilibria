@@ -137,7 +137,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <button id="bClean">Clean up blood</button>
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
-  <div class="ver">beta v0.1.6</div>
+  <div class="ver">beta v0.1.7</div>
 </div>
 
 <div id="splash">
@@ -145,7 +145,7 @@ button{-webkit-tap-highlight-color:transparent}button:active{filter:brightness(1
   <div><span class="tag">BETA</span></div>
   <p>A ragdoll that tries to stay alive. It balances, catches itself, gets back up and bleeds.</p>
   <p>Drag a body part to throw it around. Pinch to zoom. Use the buttons to spawn, drop or knock them over.</p>
-  <div class="ver">beta v0.1.6</div>
+  <div class="ver">beta v0.1.7</div>
   <button id="bPlay">Play</button>
   <div class="row" style="justify-content:center"><button id="sSound" class="tg sm">Sound: on</button><button id="sGore" class="tg sm">Blood &amp; gore: on</button></div>
 </div>
@@ -1646,13 +1646,27 @@ var RS=(function(){
   function rgb(c,m){m=m||1;return 'rgb('+(c[0]*m|0)+','+(c[1]*m|0)+','+(c[2]*m|0)+')';}
   var SKIN=[226,174,132],PALE=[205,196,182],BLOOD=[120,6,8];
   function skinTone(){var t=Math.random(),c=mix([238,192,152],[196,140,102],t),j=function(){return (Math.random()-0.5)*14;};return [c[0]+j(),c[1]+j(),c[2]+j()];}
+  function drawCrushedHead(b,base,far){ // flattened stump of a head: jaw and neck left, burst top, skull chips (all in world units so it scales with zoom)
+    var p=toScreen(b.getPosition()),z=cam.z,J=[[-0.09,-0.02],[-0.06,0.01],[-0.035,-0.025],[-0.01,0.015],[0.02,-0.03],[0.045,0.005],[0.07,-0.02],[0.09,0.0]];
+    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(-b.getAngle());ctx.scale(z,-z);
+    function edge(dy){ctx.moveTo(-0.09,-0.115);ctx.lineTo(0.09,-0.115);for(var i=J.length-1;i>=0;i--)ctx.lineTo(J[i][0],J[i][1]+dy);ctx.closePath();}
+    ctx.beginPath();ctx.moveTo(-0.11,-0.04);ctx.quadraticCurveTo(-0.13,0.03,-0.07,0.045);ctx.quadraticCurveTo(0,0.06,0.07,0.04);ctx.quadraticCurveTo(0.13,0.02,0.11,-0.045);ctx.closePath();
+    ctx.fillStyle=rgb([95,4,6],far?0.72:1);ctx.fill(); // burst mush
+    ctx.beginPath();edge(0);ctx.fillStyle=rgb(mix(base,BLOOD,0.45),far?0.72:1);ctx.fill();
+    ctx.strokeStyle='#1b1b1d';ctx.lineWidth=0.012;ctx.stroke();
+    ctx.beginPath();for(var i=0;i<J.length;i++){var q=J[i];if(i===0)ctx.moveTo(q[0],q[1]);else ctx.lineTo(q[0],q[1]);}
+    ctx.strokeStyle=rgb(BLOOD,0.8);ctx.lineWidth=0.02;ctx.stroke(); // raw torn edge
+    ctx.fillStyle='#d9c9b0';[[-0.07,0.03,0.03,0.018,0.4],[-0.015,0.04,0.024,0.014,-0.3],[0.05,0.03,0.028,0.016,0.2]].forEach(function(c){ // skull fragments
+      ctx.save();ctx.translate(c[0],c[1]);ctx.rotate(c[4]);ctx.fillRect(-c[2]/2,-c[3]/2,c[2],c[3]);ctx.restore();});
+    ctx.restore();
+  }
   function drawFlesh(far){ // filled, shaded body parts; paler as it bleeds out, bloodied where hurt
     rigs.forEach(function(r){
       var bl=r.blood==null?1:r.blood,base=mix(r.skin||SKIN,PALE,Math.min(1,(1-bl)*1.4+(r.dead?0.35:0)));
       r.bodies.forEach(function(b,k){
         var u=b.getUserData()||{};if(!!u.far!==far)return;
         var f=b.getFixtureList();if(!f)return;
-        if(k===0&&r.headCrushed){var p=toScreen(b.getWorldCenter());ctx.fillStyle=rgb(BLOOD);ctx.beginPath();ctx.ellipse(p.x,p.y,0.09*cam.z,0.05*cam.z,b.getAngle(),0,7);ctx.fill();ctx.fillStyle='#e8dccb';for(var i=0;i<4;i++){ctx.fillRect(p.x+(i-2)*0.03*cam.z,p.y-0.01*cam.z*i,3,2);}return;}
+        if(k===0&&r.headCrushed){drawCrushedHead(b,base,far);return;}
         var c=mix(base,BLOOD,Math.min(0.85,(r.bl?r.bl[k]:0)*0.8));
         ctx.beginPath();polyPath(b,f.getShape());ctx.fillStyle=rgb(c,far?0.72:1);ctx.fill();ctx.fillStyle=worldPat(skinPattern(),64);ctx.fill();
         ctx.strokeStyle='#1b1b1d';ctx.lineWidth=Math.max(1,0.012*cam.z);ctx.stroke();
