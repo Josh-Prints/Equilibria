@@ -301,3 +301,7 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Knife: aimable like the gun (`aimOf`): hold it, a second finger points it (flips via `knifeFix` so the edge stays down); lifting does nothing.
 - Stab (blade moving point-first, `along>0.7`, >2.5 m/s): wound, then the knife is pushed in 3–7 cm and welded to that part (`g.stuck`), its fixtures put in that rig's collision group. Drawn on top with the part clipped out, so only what sticks out shows. Drag it away (>22 cm stretch) to pull it out: extra gush and pain; it passes through that body for 0.25 s after. Unsticks if the part is torn off or the person removed.
 - Only the blade wounds; the handle just bumps.
+
+## v0.2.19 hotfix 1 — Knife went straight through
+- Cause: a stab happens mid-drag, so the drag target was already well past the knife; the next step saw a >22 cm stretch and counted it as pulling the knife out, then the 0.25 s pass-through let it slide through the body.
+- Fix: on sticking, the drag target snaps to the knife; it only pulls out after 350 ms and only when the finger pulls back along the handle (>20 cm behind it). Pushing deeper or sideways keeps it in.
