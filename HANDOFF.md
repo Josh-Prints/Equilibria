@@ -294,3 +294,10 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Hammer (normal speed of the head; the handle counts half): head >6 m/s kills (crushed), >3.5 knocks out. Limbs (thigh 1.5x, shin 1.15x, hand/foot 0.8–0.9x): >3 breaks the bone, >8 crushes it (shatter with full gore), >13 rips it off. Torso >4 knocks them down; >7 breaks the spine, bleeds inside and keeps them down.
 - Knife (blade only, >2 m/s): `wound()` with `cut` (slit-shaped wound drawn in `drawHoles`; a slash is longer than a stab), bleeding 0.7x a bullet, same reactions as gunshots. A chop >7 m/s on a hand, forearm, foot or shin cuts it off (needs sever gore).
 - `fire()`'s wound logic moved into `wound(r,k,hp,d,o)` shared by the gun and knife.
+
+## v0.2.19 — Hammer crushes, knife aims and sticks
+- Weapons being dragged get a much higher acceleration cap (300 vs 80 m/s²) so a fast finger swing gets the hammer head to ~10 m/s.
+- Hammer thresholds lowered (x realism, x per-part factor): head KO >3, kill >5; limbs break >2.5, crush >5.5 (shatter on Heavy/Full), rip >9; torso down >3.5, back broken >6.
+- Knife: aimable like the gun (`aimOf`): hold it, a second finger points it (flips via `knifeFix` so the edge stays down); lifting does nothing.
+- Stab (blade moving point-first, `along>0.7`, >2.5 m/s): wound, then the knife is pushed in 3–7 cm and welded to that part (`g.stuck`), its fixtures put in that rig's collision group. Drawn on top with the part clipped out, so only what sticks out shows. Drag it away (>22 cm stretch) to pull it out: extra gush and pain; it passes through that body for 0.25 s after. Unsticks if the part is torn off or the person removed.
+- Only the blade wounds; the handle just bumps.
