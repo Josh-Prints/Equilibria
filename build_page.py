@@ -206,7 +206,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.3.0</div>
+  <div class="ver">beta v0.3.1</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -216,6 +216,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <div class="sl"><div class="slh"><span>Gore</span><b id="vGore">Full</b></div><input type="range" id="rGore" min="0" max="4" step="1" value="4"><div class="sld"><span>none</span><span>full</span></div></div>
   <div class="slx" id="gDesc"></div>
   <div class="sl"><div class="slh"><span>Grab</span><b id="vGrab">Smooth</b></div><input type="range" id="rGrab" min="0" max="1" step="1" value="0"><div class="sld"><span>smooth</span><span>sticky</span></div><div class="slx" id="grDesc"></div></div>
+  <div class="sl"><div class="slh"><span>Gyro</span><b id="vGyro">Off</b></div><input type="range" id="rGyro" min="0" max="1" step="1" value="0"><div class="sld"><span>off</span><span>on</span></div><div class="slx" id="gyDesc"></div></div>
   <nav><button id="sDone">Done</button></nav>
 </div>
 <div id="splash" class="gm">
@@ -227,7 +228,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.3.0</div>
+  <div class="ver">beta v0.3.1</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">

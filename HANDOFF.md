@@ -353,3 +353,8 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.3.0
 - Josh bumped the minor version. No code changes since v0.2.26.
+
+## v0.3.1 — head/torso burst into chunks, gyro, roof
+- `RS.burst(rig,k,hard)`, under FLAGS.shatter (Heavy/Full gore): a crushed head or torso part throws 3-6 lumps as `rig.chunks` (with a few thin strands). The part stays as the skeleton: a head shrinks to a jaw stump, and a torso part is caved to half its width. It's called from head and torso crushes in `crushBleed` and from hammer blows (head over 7f, torso over 11f).
+- Settings has a Gyro slider (Off by default; saved as `eqOpts.gyro`). `devicemotion` `accelerationIncludingGravity` is rotated to screen axes and smoothed, and becomes the world gravity (capped at 40), so the room tilts or shakes with the phone. The sign is calibrated from the first reading (the phone is assumed upright when Gyro is switched on). iOS permission is requested on the slider's change event.
+- Roof at `ROOF`=20 m. The arena is drawn as a 1 m concrete shell (floor, walls, roof) with nothing outside it, so the floor no longer runs past the walls. The drag target and camera are clamped below the roof, and items above the roof get rescued.

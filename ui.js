@@ -194,12 +194,13 @@
   // =====================================================================
   // LIVE WORLD
   // =====================================================================
-  var ARENA=30; // the arena runs from -30 m to +30 m, walls at each end
+  var ARENA=30,ROOF=20; // the arena runs from -30 m to +30 m, walls at each end, roof 20 m up
   function init(){
     world=new planck.World({gravity:Vec2(0,-10)});world.on('begin-contact',meleeContact);
     drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;camFollow=null;items=[];fx=[];trig=null;
     ground=world.createBody();ground.createFixture(Box(ARENA+40,20,Vec2(0,-20),0),{friction:0.9}); // floor (20 m thick so nothing tunnels through it)
-    ground.createFixture(Box(20,60,Vec2(-ARENA-20,58),0),{friction:0.6});ground.createFixture(Box(20,60,Vec2(ARENA+20,58),0),{friction:0.6}); // walls
+    ground.createFixture(Box(20,ROOF+40,Vec2(-ARENA-20,ROOF/2),0),{friction:0.6});ground.createFixture(Box(20,ROOF+40,Vec2(ARENA+20,ROOF/2),0),{friction:0.6}); // walls
+    ground.createFixture(Box(ARENA+40,20,Vec2(0,ROOF+20),0),{friction:0.6}); // roof
     spawn('stand');
   }
   var liveBufs=[];
@@ -294,7 +295,7 @@
         if(gore){gL=layerK(r,k);addDecal(r,k,h.p,0.02+0.004*sp);}
         if(k>=nb)return;
         if(k===0){
-          if(sp>7*f&&RS.FLAGS.death!==0){if(!r.dead){r.dead=true;r.ev.push({t:'crush',k:0,d:sp});}} // skull caved in
+          if(sp>7*f&&RS.FLAGS.death!==0){if(!r.dead){r.dead=true;r.ev.push({t:'crush',k:0,d:sp});}if(RS.FLAGS.shatter)RS.burst(r,0,sp>10*f);} // skull caved in (bursts apart on Heavy/Full gore)
           else if(sp>5*f&&!r.dead){r.koT=Math.max(r.koT||0,4);r.koWhy='head';sfx('crunch',true);RS.brainHit(r,0,true);} // fractured skull: fits, then dies
           else if(sp>4*f&&!r.dead){r.koT=Math.max(r.koT||0,3+sp*0.3);r.koWhy='head';sfx('crunch',false);RS.brainHit(r,0.1+0.25*(sp-3*f)/(2*f),false);}
           return;
@@ -305,7 +306,7 @@
           return;
         }
         // torso: knocked down; hard enough breaks ribs/spine and bleeds inside (stays down)
-        if(sp>11*f){r.ev.push({t:'crushT',k:k,d:sp});if(RS.FLAGS.death!==0)r.dead=true;if(RS.FLAGS.bleed)r.holes=(r.holes||0)+6;return;} // a monster blow caves the chest / stoves in the belly: dead
+        if(sp>11*f){r.ev.push({t:'crushT',k:k,d:sp});if(RS.FLAGS.death!==0)r.dead=true;if(RS.FLAGS.shatter)RS.burst(r,k,sp>14*f);if(RS.FLAGS.bleed)r.holes=(r.holes||0)+6;return;} // a monster blow caves the chest / stoves in the belly: dead
         if(sp>3.5*f&&!r.dead){var lp=r.bodies[k].getLocalPoint(h.p),bad=sp>6*f;
           if(bad){if(k<3)RS.breakBone(r,k,true,(sp-6*f)/(3*f));if(RS.FLAGS.bleed)r.holes=(r.holes||0)+1.5;sfx('crunch',true);}
           RS.shot(r,k,lp.x,lp.y,h.d.x,bad);}
@@ -464,7 +465,7 @@
     var ib=itemOf(b),m=Math.max(drag.mass,b.getMass());
     if(!+$('rGrab').value&&!(ib&&ib.type==='knife')){ // Smooth (default; the knife always uses Sticky): the original soft spring pull, it trails the finger a bit
       if(mj){try{world.destroyJoint(mj);}catch(e){}mj=null;mjB=null;}
-      var wp0=b.getWorldPoint(drag.local),v0=b.getLinearVelocityFromWorldPoint(wp0),t0=drag.target,tx=Math.max(-ARENA+0.02,Math.min(ARENA-0.02,t0.x)),ty=Math.max(0.02,t0.y); // still can't be pulled through the floor or a wall
+      var wp0=b.getWorldPoint(drag.local),v0=b.getLinearVelocityFromWorldPoint(wp0),t0=drag.target,tx=Math.max(-ARENA+0.02,Math.min(ARENA-0.02,t0.x)),ty=Math.max(0.02,Math.min(ROOF-0.02,t0.y)); // still can't be pulled through the floor or a wall
       var ax=120*(tx-wp0.x)-22*v0.x,ay=120*(ty-wp0.y)-22*v0.y,cp=ib?(ib.stuck?40:300):80,mg=Math.sqrt(ax*ax+ay*ay);if(mg>cp){ax*=cp/mg;ay*=cp/mg;}
       b.applyForce(Vec2(ax*m,ay*m),wp0,true);
       var g0=aimOf(b);if(g0&&g0.aim!=null&&!g0.stuck){var e0=g0.aim-b.getAngle();e0=Math.atan2(Math.sin(e0),Math.cos(e0));b.setAngularVelocity(30*e0);}
@@ -472,7 +473,7 @@
     }
     var cap=ib?(ib.stuck?40:600):250; // max accel the hand gives (x mass): a stuck knife gets about 40 N, or the joint gets torn about; a body gets yanked hard enough to rip limbs off
     if(!mj){var wp=b.getWorldPoint(drag.local);mj=world.createJoint(planck.MouseJoint({maxForce:cap*m,frequencyHz:ib?25:15,dampingRatio:0.9},ground,b,wp));mjB=b;mjW=world;}
-    var tg=drag.target;tg=Vec2(Math.max(-ARENA+0.02,Math.min(ARENA-0.02,tg.x)),Math.max(0.02,tg.y)); // a finger below the floor or past a wall holds it against it, not through
+    var tg=drag.target;tg=Vec2(Math.max(-ARENA+0.02,Math.min(ARENA-0.02,tg.x)),Math.max(0.02,Math.min(ROOF-0.02,tg.y))); // a finger below the floor or past a wall holds it against it, not through
     mj.setMaxForce(cap*m);var soft=false;if(ib&&ib.stuck){var wq=b.getWorldPoint(drag.local),bx=b.getWorldVector(Vec2(1,0));soft=(drag.target.x-wq.x)*bx.x+(drag.target.y-wq.y)*bx.y>0;} // pushing a stuck knife in: held softly, so how far you push sets how hard it goes in; pulling it out: firm
     mj.setFrequency(soft?3:ib?25:15);mj.setTarget(tg);
     var g=aimOf(b);if(g&&g.aim!=null&&!g.stuck){var e=g.aim-b.getAngle();e=Math.atan2(Math.sin(e),Math.cos(e));b.setAngularVelocity(30*e);}
@@ -545,6 +546,19 @@
   var userPaused=false,MAXR=Infinity; // no cap on people
   function setOn(id,on){document.getElementById(id).classList.toggle('on',!!on);}
   function $(id){return document.getElementById(id);}
+  // GYRO: the arena is fixed to the phone, so tilting (or shaking) the phone tilts the room; gravity keeps pointing the
+  // real way down, so people and things fall and slide inside it. Uses the accelerometer (gravity included), smoothed.
+  var gyro={on:false,lis:false,gx:0,gy:-10,sgn:0};
+  function gyroMotion(e){var a=e.accelerationIncludingGravity;if(!a||a.x==null)return;
+    var x=a.x,y=a.y,an=((screen.orientation&&screen.orientation.angle)||window.orientation||0)*Math.PI/180,c=Math.cos(an),s=Math.sin(an),sx=x*c+y*s,sy=-x*s+y*c; // into screen axes
+    if(!gyro.sgn)gyro.sgn=sy>0?-1:1; // browsers disagree on the sign: it's held roughly upright when switched on, so down is whichever way y points
+    var k=10/9.81,tx=gyro.sgn*sx*k,ty=gyro.sgn*sy*k,m=Math.hypot(tx,ty);if(m>40){tx*=40/m;ty*=40/m;}
+    gyro.gx+=(tx-gyro.gx)*0.3;gyro.gy+=(ty-gyro.gy)*0.3;}
+  function gyroOn(on,ask){
+    if(on&&!gyro.lis){var go=function(){if(!gyro.lis){window.addEventListener('devicemotion',gyroMotion);gyro.lis=true;}};
+      if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission==='function'){if(ask)DeviceMotionEvent.requestPermission().then(function(r){if(r==='granted')go();}).catch(function(){});}else go();}
+    gyro.on=on;if(!on){gyro.sgn=0;gyro.gx=0;gyro.gy=-10;}
+  }
   function tgl(id){var c=$(id);c.checked=!c.checked;syncMenu();}
   // gore setting: 5 levels, each mapped to a 0-10 strength (0 none, 3 light, 5 bleeding + limbs off, 8 shattering, 10 full)
   var GLV=[0,3,5,8,10],GNAME=['None','Light','Medium','Heavy','Full'],
@@ -557,18 +571,19 @@
     var cv=+$('rCrush').value,gl=+$('rGore').value,gv=goreV(),rl=+$('rReal').value;$('vCrush').textContent=cv;$('vReal').textContent=RNAME[rl];$('rDesc').textContent=RDESC[rl];$('vGore').textContent=GNAME[gl];
     $('oGore').checked=gv>0;GM=gv/10;
     $('gDesc').textContent=GDESC[gl];
+    var gy0=+$('rGyro').value;$('vGyro').textContent=gy0?'On':'Off';$('gyDesc').textContent=gy0?'Tilt or shake the phone: the room tilts with it, and everything inside falls the real way down.':'Gravity always points down the screen.';gyroOn(!!gy0);
     var gr=+$('rGrab').value;$('vGrab').textContent=gr?'Sticky':'Smooth';$('grDesc').textContent=gr?'Things stay stuck to your finger: fast swings, hard yanks rip limbs off.':'Things follow your finger with a soft, smoothed pull (the original feel).';
-    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),goreL:gl,crush:cv,real:rl,grab:gr}));}catch(_){}
+    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),goreL:gl,crush:cv,real:rl,grab:gr,gyro:gy0}));}catch(_){}
     if(AC&&master)master.gain.value=opt('oSound')?0.9:0;
   }
-  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;if(so.goreL!=null)$('rGore').value=so.goreL;else if(so.goreLv!=null)$('rGore').value=Math.round(so.goreLv*0.4);else if(so.gore===false)$('rGore').value=0;if(so.crush!=null)$('rCrush').value=so.crush;if(so.real!=null)$('rReal').value=so.real;if(so.grab!=null)$('rGrab').value=so.grab;}}catch(_){}
+  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;if(so.goreL!=null)$('rGore').value=so.goreL;else if(so.goreLv!=null)$('rGore').value=Math.round(so.goreLv*0.4);else if(so.gore===false)$('rGore').value=0;if(so.crush!=null)$('rCrush').value=so.crush;if(so.real!=null)$('rReal').value=so.real;if(so.grab!=null)$('rGrab').value=so.grab;if(so.gyro!=null)$('rGyro').value=so.gyro;}}catch(_){}
   function pauseMenu(on){userPaused=on;$('pmenu').hidden=!on;setOn('bPause',on);}
   $('bPause').onclick=function(){pauseMenu(true);};
   $('mResume').onclick=function(){pauseMenu(false);};
   $('bSlowB').onclick=function(){tgl('oSlow');};
   $('mSound').onclick=$('sSound').onclick=function(){tgl('oSound');audioInit();};
   $('mSet').onclick=$('sSet').onclick=function(){$('smenu').hidden=false;};$('sDone').onclick=function(){$('smenu').hidden=true;};
-  $('rCrush').oninput=$('rGore').oninput=$('rReal').oninput=$('rGrab').oninput=syncMenu;
+  $('rCrush').oninput=$('rGore').oninput=$('rReal').oninput=$('rGrab').oninput=$('rGyro').oninput=syncMenu;$('rGyro').onchange=function(){gyroOn(!!+this.value,true);};
   $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];r.holeK=null;r.hole=null;r.holes=0;r.heart=null;});pauseMenu(false);};
   $('mMain').onclick=function(){pauseMenu(false);init();var sp=$('splash');sp.hidden=false;sp.style.opacity=1;};
   $('bPlay').onclick=function(){var sp=$('splash');sp.style.transition='opacity .4s';sp.style.opacity=0;setTimeout(function(){sp.hidden=true;},400);audioInit();
@@ -930,13 +945,12 @@
     if(pat.setTransform)pat.setTransform(new DOMMatrix([k,0,0,k,o.x,o.y]));
     return pat;
   }
-  function drawGround(gy){
-    ctx.save();ctx.imageSmoothingEnabled=false;ctx.fillStyle=worldPat(groundPattern(),64);ctx.fillRect(0,gy,W,H-gy+1);
-    ctx.fillStyle='#3a3329';ctx.fillRect(0,gy,W,Math.max(2,0.03*cam.z)); // top edge
-    ctx.fillStyle='rgba(255,176,32,0.35)';ctx.fillRect(0,gy,W,1); // thin amber line along the floor
-    [-1,1].forEach(function(sd){var wx=toScreen(Vec2(sd*ARENA,0)).x; // the walls: same concrete, amber edge
-      ctx.fillStyle=worldPat(groundPattern(),64);if(sd<0){if(wx>0)ctx.fillRect(0,0,wx,gy);}else if(wx<W)ctx.fillRect(wx,0,W-wx,gy);
-      ctx.fillStyle='#3a3329';var ew=Math.max(2,0.03*cam.z);ctx.fillRect(sd<0?wx-ew:wx,0,ew,gy);ctx.fillStyle='rgba(255,176,32,0.35)';ctx.fillRect(wx,0,1,gy);});
+  function drawGround(gy){ // the arena: a 1 m concrete shell (floor, two walls, roof) with nothing outside it
+    var TH=1,a=toScreen(Vec2(-ARENA-TH,ROOF+TH)),b=toScreen(Vec2(ARENA+TH,-TH)),c=toScreen(Vec2(-ARENA,ROOF)),d=toScreen(Vec2(ARENA,0)),ew=Math.max(2,0.03*cam.z);
+    ctx.save();ctx.imageSmoothingEnabled=false;ctx.fillStyle=worldPat(groundPattern(),64);
+    ctx.beginPath();ctx.rect(a.x,a.y,b.x-a.x,b.y-a.y);ctx.rect(c.x,c.y,d.x-c.x,d.y-c.y);ctx.fill('evenodd'); // shell = outer box minus the inside
+    ctx.fillStyle='#3a3329';ctx.fillRect(c.x,d.y,d.x-c.x,ew);ctx.fillRect(c.x,c.y-ew,d.x-c.x,ew);ctx.fillRect(c.x-ew,c.y,ew,d.y-c.y);ctx.fillRect(d.x,c.y,ew,d.y-c.y); // inner edges
+    ctx.strokeStyle='rgba(255,176,32,0.35)';ctx.lineWidth=1;ctx.strokeRect(c.x,c.y,d.x-c.x,d.y-c.y); // thin amber line round the inside
     ctx.fillStyle='#4a0606';
     stains.forEach(function(s){var a=toScreen(Vec2(s.x,0));ctx.globalAlpha=0.92;ctx.beginPath();ctx.ellipse(a.x,a.y+1,Math.max(0.5,s.w*cam.z*0.5),Math.max(0.4,s.h*cam.z),0,0,Math.PI*2);ctx.fill();});
     ctx.restore();
@@ -1147,8 +1161,9 @@
   }
   function frameInner(t){
     var dt=Math.min((t-last)/1000,0.05);last=t;
-    cam.x=Math.max(-ARENA+1,Math.min(ARENA-1,cam.x)); // camera stays in the arena
-    items.forEach(function(g){var q=g.b.getPosition();if(!g.stuck&&(q.y<-0.03||Math.abs(q.x)>ARENA)){g.b.setTransform(Vec2(Math.max(-ARENA+0.3,Math.min(ARENA-0.3,q.x)),0.2),g.b.getAngle());g.b.setLinearVelocity(Vec2(0,0));}}); // anything that got pushed through the floor or a wall pops back out
+    if(world){var gw=gyro.on&&gyro.lis?Vec2(gyro.gx,gyro.gy):Vec2(0,-10),g0=world.getGravity();if(Math.abs(g0.x-gw.x)+Math.abs(g0.y-gw.y)>1e-3){world.setGravity(gw);world.getBodyList()&&rigs.forEach(function(r){r.bodies.forEach(function(b){b.setAwake(true);});});items.forEach(function(g){g.b.setAwake(true);});}}
+    cam.x=Math.max(-ARENA+1,Math.min(ARENA-1,cam.x));cam.y=Math.max(-1,Math.min(ROOF+1,cam.y)); // camera stays in the arena
+    items.forEach(function(g){var q=g.b.getPosition();if(!g.stuck&&(q.y<-0.03||q.y>ROOF||Math.abs(q.x)>ARENA)){g.b.setTransform(Vec2(Math.max(-ARENA+0.3,Math.min(ARENA-0.3,q.x)),0.2),g.b.getAngle());g.b.setLinearVelocity(Vec2(0,0));}}); // anything that got pushed through the floor or a wall pops back out
     var paused=userPaused||training&&pool.mode!=='workers'; // main-thread training: no time left for the live view
     if(!paused){
       if(opt('oSlow'))dt*=0.25;
