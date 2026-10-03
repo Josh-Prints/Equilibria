@@ -319,3 +319,9 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 
 ## v0.2.21 hotfix 1 — pulled-out knife rocketing away
 - Grabbing a stuck knife sizes the drag force by `islandMass` (knife + whole welded body). After `unstick` that force hit the knife alone, ~110 m/s. `unstick` now resets `drag.mass` to the knife's own mass (~3 m/s, stays in hand).
+
+## v0.2.22 — knife slides in by force, bleeds by depth
+- A stab no longer snaps to the hilt. The tip goes in `0.02+0.014*speed` m (blade `KBL`=0.16), held by a PrismaticJoint along the blade. Its motor (speed 0) is the flesh's grip: `3+10*(depth/KBL)^2` N while held, `KGRIP`=20 N when let go.
+- Push the handle forward to drive it deeper; it gets harder the deeper it goes, and going deeper hurts (painS). Pull back until the tip's out, or yank hard (finger more than 0.35 m back along the handle), to remove it.
+- On removal the bleed weight is scaled `0.3+1.2*depthFrac`; heart only if depthFrac >= 0.45 (otherwise chest weight). Head: tip past `KBRAIN`=0.08 m = fatal brain injury (seizure, fade, death); shallower = brain damage when pulled out.
+- Holding a stuck knife uses `KHAND`=1 kg of drag with a 40 m/s² cap (it used to tear the joint about). Knife density raised ×5 (~0.1 kg) for joint stability. `hit()` checks items first, so a stuck knife is grabbed rather than the arm behind it.

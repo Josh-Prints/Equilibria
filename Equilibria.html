@@ -203,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.21 hotfix 1</div>
+  <div class="ver">beta v0.2.22</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -223,7 +223,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.21 hotfix 1</div>
+  <div class="ver">beta v0.2.22</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1585,21 +1585,26 @@ var RS=(function(){
   }
   function knifeFix(g){ // s=-1 mirrors it so the edge stays down when it points left
     var b=g.b,s=g.s,f,gi=g.stuck?g.stuck.gi:0;while((f=b.getFixtureList()))b.destroyFixture(f);
-    b.createFixture(Box(0.05,0.014,Vec2(-0.05,0),0),{density:2,friction:0.8,filterGroupIndex:gi,userData:{part:'handle'}});
-    b.createFixture(planck.Polygon([Vec2(0,-0.012*s),Vec2(0.13,-0.006*s),Vec2(0.16,0.012*s),Vec2(0,0.012*s)]),{density:4,friction:0.2,filterGroupIndex:gi,userData:{part:'blade'}}); // edge on the bottom, tip forward
+    b.createFixture(Box(0.05,0.014,Vec2(-0.05,0),0),{density:8,friction:0.8,filterGroupIndex:gi,userData:{part:'handle'}});
+    b.createFixture(planck.Polygon([Vec2(0,-0.012*s),Vec2(0.13,-0.006*s),Vec2(0.16,0.012*s),Vec2(0,0.012*s)]),{density:20,friction:0.2,filterGroupIndex:gi,userData:{part:'blade'}}); // edge on the bottom, tip forward
   }
   function itemFix(g){if(g.type==='gun')gunFix(g);else if(g.type==='knife')knifeFix(g);}
   function setGroup(b,gi){for(var f=b.getFixtureList();f;f=f.getNext())f.setFilterData({groupIndex:gi,categoryBits:1,maskBits:0xFFFF});}
+  var KBL=0.16,KHAND=1,KGRIP=20,KBRAIN=0.08; // blade length; how strong your hand is on a stuck knife (kg-equivalent); flesh grip when you let go; depth into the skull that's fatal
+  function brainIn(S){if(!S.brain&&rigs.indexOf(S.r)>=0){S.brain=1;RS.brainHit(S.r,0,true);}}
   function unstick(g,yank){ // pulled out (or the part it was in is gone)
     var S=g.stuck;if(!S)return;g.stuck=null;try{world.destroyJoint(S.j);}catch(e){}
-    var P=S.pend,R2=S.r;if(P&&rigs.indexOf(R2)>=0){ // the wound opens now it's out
+    var P=S.pend,R2=S.r,fq=Math.min(1,(S.dmax||KBL)/KBL);
+    if(S.k===0&&!S.brain&&rigs.indexOf(R2)>=0)RS.brainHit(R2,0.08+0.3*fq,false); // shallow into the skull: damage, not death
+    if(P&&rigs.indexOf(R2)>=0){ // the wound opens now it's out, worse the deeper it went
+      if(P.heart&&fq<0.45){P.heart=null;P.hw=P.hwNH;}if(P.hw)P.hw*=0.3+1.2*fq; // a shallow stab doesn't reach the heart
       if(P.hw&&RS.FLAGS.bleed)R2.holes=(R2.holes||0)+P.hw;
       if(P.hole){(R2.hole||(R2.hole=[])).push(P.hole);if(opt('oGore')&&P.hole.k<R2.bodies.length+(R2.chunks?R2.chunks.length:0)){var wp2=partOf(R2,P.hole.k).getWorldPoint(Vec2(P.hole.x,P.hole.y));addDecal(R2,P.hole.k,wp2,0.03);splats(R2,P.hole.k,2,0.02);}}
       if(P.heart&&!R2.heart)R2.heart=P.heart;
     }
     if(drag&&drag.body===g.b)drag.mass=g.b.getMass(); // was grabbed while welded in, so the pull was sized for the whole body: knife alone now or it rockets off
     g.ghost=0.25; // stays passing through that body a moment so it doesn't catch on the way out
-    if(yank&&opt('oGore')&&rigs.indexOf(S.r)>=0){var p=g.b.getWorldPoint(Vec2(0.08,0)),d=g.b.getWorldVector(Vec2(-1,0));gL=layerK(S.r,S.k);gush(p.x,p.y,d.x*1.5,d.y*1.5,40,2,0.8);sfx('squelch');S.r.painS=Math.min(2,(S.r.painS||0)+0.3);}
+    if(yank&&opt('oGore')&&rigs.indexOf(S.r)>=0){var p=g.b.getWorldPoint(Vec2(0.08,0)),d=g.b.getWorldVector(Vec2(-1,0));gL=layerK(S.r,S.k);gush(p.x,p.y,d.x*1.5,d.y*1.5,Math.round(12+40*fq),1+1.4*fq,0.8);sfx('squelch');S.r.painS=Math.min(2,(S.r.painS||0)+0.3);}
   }
   var mq=[],midN=0;
   function meleeContact(c){
@@ -1616,8 +1621,13 @@ var RS=(function(){
       if(gi2.ghost>0){gi2.ghost-=RS.DT||1/240;if(gi2.ghost<=0&&!gi2.stuck)setGroup(gi2.b,0);}
       var S=gi2.stuck;if(!S)continue;
       if(rigs.indexOf(S.r)<0||(S.k<S.r.bodies.length&&S.k>=4&&S.r.inj&&S.r.inj.gone[S.k-1])){unstick(gi2,false);continue;}
-      if(drag&&drag.body===gi2.b&&performance.now()-S.t0>350){var wp=gi2.b.getWorldPoint(drag.local),bx=gi2.b.getWorldVector(Vec2(-1,0)); // yanked out: only a pull back along the handle counts, pushing it deeper or sideways doesn't
-        if((drag.target.x-wp.x)*bx.x+(drag.target.y-wp.y)*bx.y>0.2)unstick(gi2,true);}
+      var tr=S.j.getJointTranslation(),dp=S.d0+tr,held=drag&&drag.body===gi2.b; // dp: how deep the tip is now
+      if(dp>S.dmax){if(rigs.indexOf(S.r)>=0)S.r.painS=Math.min(2,(S.r.painS||0)+3*(dp-S.dmax));S.dmax=dp;}S.dep=dp; // deeper hurts
+      if(S.k===0&&dp>KBRAIN)brainIn(S);
+      S.j.setMaxMotorForce(held?3+10*Math.pow(dp/KBL,2):KGRIP); // pushing it in gets harder the deeper it goes; let go and the flesh holds it
+      if(dp<0.004&&performance.now()-S.t0>150){unstick(gi2,true);continue;} // pulled back until the tip's out
+      if(held&&performance.now()-S.t0>350){var wq=gi2.b.getWorldPoint(drag.local),bq=gi2.b.getWorldVector(Vec2(-1,0)); // a hard yank (finger well back along the handle) rips it out even if it drags them along
+        if((drag.target.x-wq.x)*bq.x+(drag.target.y-wq.y)*bq.y>0.35){unstick(gi2,true);continue;}}
     }
     if(!mq.length)return;var q=mq;mq=[];var now=performance.now();
     q.forEach(function(h){
@@ -1649,10 +1659,12 @@ var RS=(function(){
         var pend=wound(r,k,h.p,h.d,{cut:1,s:h.st,slash:slash,stab:stab});
         if(stab&&rigs.indexOf(r)>=0){ // point first: it goes in and stays there until you pull it out
           var pb=partOf(r,k),gi=pb.getFixtureList().getFilterGroupIndex();
-          var base=g.b.getWorldPoint(Vec2(0,0)),dep=(h.p.x-base.x)*ax.x+(h.p.y-base.y)*ax.y,bp=g.b.getPosition(); // in to the hilt: the base of the blade sits where it went in
-          g.b.setTransform(Vec2(bp.x+ax.x*dep,bp.y+ax.y*dep),g.b.getAngle());
-          g.stuck={r:r,k:k,gi:gi,j:null,t0:now,pend:pend};if(drag&&drag.body===g.b){var dw=g.b.getWorldPoint(drag.local);drag.target=Vec2(dw.x,dw.y);}setGroup(g.b,gi);g.b.setLinearVelocity(pb.getLinearVelocity());g.b.setAngularVelocity(pb.getAngularVelocity());
-          g.stuck.j=world.createJoint(planck.WeldJoint({frequencyHz:0},pb,g.b,h.p));sfx('squelch');
+          var tip=g.b.getWorldPoint(Vec2(KBL,0)),pen=(tip.x-h.p.x)*ax.x+(tip.y-h.p.y)*ax.y,bp=g.b.getPosition();
+          var d0=Math.min(KBL,0.02+0.014*h.st),mv=d0-pen; // how far the tip gets in on its own: a hard thrust goes deeper; pushing does the rest
+          g.b.setTransform(Vec2(bp.x+ax.x*mv,bp.y+ax.y*mv),g.b.getAngle());
+          g.stuck={r:r,k:k,gi:gi,j:null,t0:now,pend:pend,d0:d0,dep:d0,dmax:d0};if(drag&&drag.body===g.b){var dw=g.b.getWorldPoint(drag.local);drag.target=Vec2(dw.x,dw.y);drag.mass=KHAND;}setGroup(g.b,gi);g.b.setLinearVelocity(pb.getLinearVelocity());g.b.setAngularVelocity(pb.getAngularVelocity());
+          g.stuck.j=world.createJoint(planck.PrismaticJoint({enableLimit:true,lowerTranslation:-d0-0.01,upperTranslation:KBL-d0,enableMotor:true,motorSpeed:0,maxMotorForce:KGRIP},pb,g.b,h.p,ax));sfx('squelch'); // slides only along the blade; the motor is the flesh gripping it
+          if(k===0&&d0>KBRAIN)brainIn(g.stuck);
         }
         if(k>=4&&k<nb&&h.st>7*f&&RS.FLAGS.sever&&gore){var jj=k-1,ty=(k-4)%6;if(ty===2||ty===5||ty===1||ty===4){if(r.inj&&!r.inj.gone[jj])RS.sever(r,jj);}} // a hard chop takes off a hand, foot, forearm or shin
       }
@@ -1701,9 +1713,9 @@ var RS=(function(){
     else if(heart&&!r.heart){r.heart={x:lp.x,y:lp.y};if(gore){gL=layerK(r,k);gush(hp.x,hp.y,-d.x*1.5,-d.y*1.5,60,2.6,0.8);}}
     var leg=k>=4&&k<nb&&((k-4)%6===3||(k-4)%6===4),thigh=k>=4&&k<nb&&(k-4)%6===3;
     var hw=ext?0.35:heart?10:k===1?5:k===2?3.2:k===3?2.4:thigh?2.2:1; // the thigh has the femoral artery // x0.25 = bleed weight (a torn-off leg is 1)
-    if(plug)pend.hw=hw*sc;else if(RS.FLAGS.bleed)r.holes=(r.holes||0)+hw*sc;
+    if(plug){pend.hw=hw*sc;if(heart)pend.hwNH=5*sc;}else if(RS.FLAGS.bleed)r.holes=(r.holes||0)+hw*sc;
     if(k===0&&gun&&RS.FLAGS.death!==0&&!r.dead){r.dead=true;r.ev=r.ev||[];} // a bullet to the head: dead
-    else if(k===0&&cut&&!r.dead)RS.brainHit(r,plug?0:0.15,plug); // a blade into the skull: fits, fades out and dies; a slash: some damage
+    else if(k===0&&cut&&!plug&&!r.dead)RS.brainHit(r,0.15,false); // a blade into the skull: fits, fades out and dies; a slash: some damage
     else if(gun&&k>=4&&k<nb&&!ext&&r.inj){var j=k-1;var pb=RS.FLAGS.realism===0?0.8:RS.FLAGS.realism===2?0.35:0.5;
       if(!r.inj.broken[j]&&!r.inj.gone[j]&&Math.random()<pb)RS.breakBone(r,j,true);}
     if(k<nb&&!r.dead)RS.shot(r,k,lp.x,lp.y,d.x,k>=1&&k<=3||leg);
@@ -1759,6 +1771,7 @@ var RS=(function(){
     if(rigs.length>MAXR){var old=rigs.shift();liveBufs.shift();old.bodies.forEach(function(b){world.destroyBody(b);});} // keep it fast on phones
   }
   function hit(p){
+    for(var ii=0;ii<items.length;ii++)for(var f0=items[ii].b.getFixtureList();f0;f0=f0.getNext())if(f0.testPoint(p))return items[ii].b; // weapons are drawn on top, so they're grabbed first (a knife stuck in someone, not the arm behind it)
     for(var b=world.getBodyList();b;b=b.getNext()){
       if(!b.isDynamic())continue;
       for(var f=b.getFixtureList();f;f=f.getNext())if(f.testPoint(p))return b;
@@ -1792,7 +1805,7 @@ var RS=(function(){
     var b=drag.body;b.setAwake(true);
     var wp=b.getWorldPoint(drag.local),v=b.getLinearVelocityFromWorldPoint(wp);
     var ax=120*(drag.target.x-wp.x)-22*v.x,ay=120*(drag.target.y-wp.y)-22*v.y;
-    var cap=itemOf(b)?300:80; // swinging a weapon: it can be whipped round much faster than a body
+    var ib=itemOf(b),cap=ib?(ib.stuck?40:300):80; // a stuck knife: about 40 N of hand, or the joint gets torn about by the force // swinging a weapon: it can be whipped round much faster than a body
     var mag=Math.sqrt(ax*ax+ay*ay);if(mag>cap){ax*=cap/mag;ay*=cap/mag;}
     var m=Math.max(drag.mass,b.getMass());
     b.applyForce(Vec2(ax*m,ay*m),wp,true);
@@ -1819,7 +1832,7 @@ var RS=(function(){
     var p=ptrs[e.pointerId],h=pick(p.x,p.y);
     if(h){
       var wp=toWorld(h.sx,h.sy);
-      drag={body:h.b,local:h.b.getLocalPoint(wp),target:toWorld(p.x,p.y),mass:islandMass(h.b)};
+      drag={body:h.b,local:h.b.getLocalPoint(wp),target:toWorld(p.x,p.y),mass:itemOf(h.b)&&itemOf(h.b).stuck?KHAND:islandMass(h.b)};
       mode='drag';tap={id:e.pointerId,t:performance.now(),x:p.x,y:p.y,b:h.b};
       var hg=aimOf(h.b);if(hg){hg.aim=h.b.getAngle();var hs=Math.cos(hg.aim)<0?-1:1;if(hs!==hg.s){hg.s=hs;itemFix(hg);}}
       var r0=rigOf(h.b),p0={x:p.x,y:p.y};clearTimeout(holdT);
@@ -2479,7 +2492,7 @@ var RS=(function(){
     if(!paused){goreStep(Math.min(dt,0.05));fxStep(Math.min(dt,0.05));}
     draw();if(++injN%10===0){injSync();hud();}
   }
-  window.EQ={rigs:function(){return rigs;},parts:function(){return parts;},cam:function(){return cam;},follow:function(){return camFollow;},items:function(){return items;},fire:fire,fx:function(){return fx;},toScreen:toScreen}; // for poking at it from the console
+  window.EQ={rigs:function(){return rigs;},parts:function(){return parts;},cam:function(){return cam;},follow:function(){return camFollow;},items:function(){return items;},fire:fire,fx:function(){return fx;},toScreen:toScreen,drag:function(){return drag;}}; // for poking at it from the console
   init();updateInfo();requestAnimationFrame(frame);
 })();
 
