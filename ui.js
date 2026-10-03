@@ -278,8 +278,9 @@
         if(gore){gL=layerK(r,k);addDecal(r,k,h.p,0.02+0.004*sp);}
         if(k>=nb)return;
         if(k===0){
-          if(sp>5*f&&RS.FLAGS.death!==0){if(!r.dead){r.dead=true;r.ev.push({t:'crush',k:0,d:sp});}}
-          else if(sp>3*f&&!r.dead){r.koT=Math.max(r.koT||0,4+sp*0.5);r.koWhy='head';sfx('crunch',false);}
+          if(sp>7*f&&RS.FLAGS.death!==0){if(!r.dead){r.dead=true;r.ev.push({t:'crush',k:0,d:sp});}} // skull caved in
+          else if(sp>5*f&&!r.dead){r.koT=Math.max(r.koT||0,4);r.koWhy='head';sfx('crunch',true);RS.brainHit(r,0,true);} // fractured skull: fits, then dies
+          else if(sp>3*f&&!r.dead){r.koT=Math.max(r.koT||0,4+sp*0.5);r.koWhy='head';sfx('crunch',false);RS.brainHit(r,0.1+0.25*(sp-3*f)/(2*f),false);}
           return;
         }
         if(k>=4){var j=k-1;if(!r.inj||r.inj.gone[j])return;f*=[1,0.9,0.8,1.5,1.15,0.9][(k-4)%6]; // the thigh bone takes the most
@@ -350,7 +351,8 @@
     var leg=k>=4&&k<nb&&((k-4)%6===3||(k-4)%6===4),thigh=k>=4&&k<nb&&(k-4)%6===3;
     var hw=ext?0.35:heart?10:k===1?5:k===2?3.2:k===3?2.4:thigh?2.2:1; // the thigh has the femoral artery // x0.25 = bleed weight (a torn-off leg is 1)
     if(plug)pend.hw=hw*sc;else if(RS.FLAGS.bleed)r.holes=(r.holes||0)+hw*sc;
-    if(k===0&&RS.FLAGS.death!==0&&!r.dead&&(gun||o.s>5)){r.dead=true;r.ev=r.ev||[];} // a knife to the head kills only when driven in hard
+    if(k===0&&gun&&RS.FLAGS.death!==0&&!r.dead){r.dead=true;r.ev=r.ev||[];} // a bullet to the head: dead
+    else if(k===0&&cut&&!r.dead)RS.brainHit(r,plug?0:0.15,plug); // a blade into the skull: fits, fades out and dies; a slash: some damage
     else if(gun&&k>=4&&k<nb&&!ext&&r.inj){var j=k-1;var pb=RS.FLAGS.realism===0?0.8:RS.FLAGS.realism===2?0.35:0.5;
       if(!r.inj.broken[j]&&!r.inj.gone[j]&&Math.random()<pb)RS.breakBone(r,j,true);}
     if(k<nb&&!r.dead)RS.shot(r,k,lp.x,lp.y,d.x,k>=1&&k<=3||leg);
@@ -585,7 +587,7 @@
   document.getElementById('hmRename').onclick=function(){var r=menuRig;closeMenu();if(r)openRename(r);};
   document.getElementById('hmFollow').onclick=function(){var r=menuRig;closeMenu();camFollow=camFollow===r?null:r;camT=null;};
   document.getElementById('hmTurn').onclick=function(){if(menuRig)turnAround(menuRig);closeMenu();};
-  document.getElementById('hmHeal').onclick=function(){var r=menuRig;closeMenu();if(!r)return;for(var k=0;k<RS.NJ;k++)RS.breakBone(r,k,false);r.blood=1;r.dead=false;r.koT=0;r.age=0;if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];r.holeK=null;r.hole=null;r.holes=0;r.shot=null;r.heart=null;};
+  document.getElementById('hmHeal').onclick=function(){var r=menuRig;closeMenu();if(!r)return;for(var k=0;k<RS.NJ;k++)RS.breakBone(r,k,false);r.blood=1;r.dead=false;r.koT=0;r.age=0;if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];r.holeK=null;r.hole=null;r.holes=0;r.shot=null;r.heart=null;r.brain=0;r.bd=null;r.veg=false;r.seizT=0;};
   document.getElementById('hmKill').onclick=function(){if(menuRig)menuRig.dead=true;closeMenu();};
   document.getElementById('hmRemove').onclick=function(){if(menuRig)removeRig(menuRig);closeMenu();};
   cv.addEventListener('pointerdown',function(){if(menuRig)closeMenu();$('spmenu').hidden=true;},true);
@@ -605,7 +607,7 @@
     function card(r){
       var bl=r.blood==null?1:r.blood,I=r.inj,nb=0,ng=0;
       if(I)for(var k=0;k<RS.NJ;k++){if(I.broken[k])nb++;if(I.gone[k]&&(k%3===0||!I.gone[k-1]))ng++;}
-      var st=r.dead?'Dead':r.koT>0?(r.koWhy==='pain'?'Passed out':'Knocked out'):r.groggy>0?'Waking up':r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
+      var st=r.dead?'Dead':r.seizing?'Seizure':r.veg?'Vegetable':r.bd!=null?'Brain dying':r.koT>0?(r.koWhy==='pain'?'Passed out':'Knocked out'):r.groggy>0?'Waking up':r.cowering?'In pain':r.gu&&r.gu.ph>=0?'Getting up':nb||ng?'Hurt':'OK';
       return '<div class="hc" data-n="'+r.num+'">'+(r.name?esc(r.name):'#'+r.num)+' '+st+(nb?' · '+nb+' broken':'')+(ng?' · '+ng+' lost':'')+'<div class="hb"><i style="width:'+Math.round(bl*100)+'%"></i></div></div>';
     }
     // up to 5 humans: a tab each; more than that: one drop-down tab that opens the full list
