@@ -203,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.18</div>
+  <div class="ver">beta v0.2.19</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -223,7 +223,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.18</div>
+  <div class="ver">beta v0.2.19</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1537,9 +1537,10 @@ var RS=(function(){
   }
   function itemOf(b){for(var i=0;i<items.length;i++)if(items[i].b===b)return items[i];return null;}
   function gunOf(b){var g=itemOf(b);return g&&g.type==='gun'?g:null;}
+  function aimOf(b){var g=itemOf(b);return g&&(g.type==='gun'||g.type==='knife')?g:null;} // things you point with a second finger
   function aimAt(g,w){ // point the barrel at a world point, flipping the gun over when it swings past vertical
     var p=g.b.getPosition(),a=Math.atan2(w.y-p.y,w.x-p.x),s=Math.cos(a)<0?-1:1;
-    if(s!==g.s){g.s=s;gunFix(g);}
+    if(s!==g.s){g.s=s;itemFix(g);}
     g.aim=a;
   }
   // MELEE: a sledgehammer and a knife you drag and swing. Contacts with people are queued in the physics callback
@@ -1552,9 +1553,19 @@ var RS=(function(){
   }
   function spawnKnife(){
     var b=world.createBody({type:'dynamic',position:Vec2(cam.x,Math.max(0.6,cam.y+0.3)),angle:0,bullet:true});
-    b.createFixture(Box(0.05,0.014,Vec2(-0.05,0),0),{density:2,friction:0.8,userData:{part:'handle'}});
-    b.createFixture(planck.Polygon([Vec2(0,-0.012),Vec2(0.13,-0.006),Vec2(0.16,0.012),Vec2(0,0.012)]),{density:4,friction:0.2,userData:{part:'blade'}}); // edge on the bottom, tip forward
-    var g={type:'knife',b:b,cd:{}};b.setUserData({item:'knife'});items.push(g);
+    var g={type:'knife',b:b,cd:{},s:1};knifeFix(g);b.setUserData({item:'knife'});items.push(g);
+  }
+  function knifeFix(g){ // s=-1 mirrors it so the edge stays down when it points left
+    var b=g.b,s=g.s,f,gi=g.stuck?g.stuck.gi:0;while((f=b.getFixtureList()))b.destroyFixture(f);
+    b.createFixture(Box(0.05,0.014,Vec2(-0.05,0),0),{density:2,friction:0.8,filterGroupIndex:gi,userData:{part:'handle'}});
+    b.createFixture(planck.Polygon([Vec2(0,-0.012*s),Vec2(0.13,-0.006*s),Vec2(0.16,0.012*s),Vec2(0,0.012*s)]),{density:4,friction:0.2,filterGroupIndex:gi,userData:{part:'blade'}}); // edge on the bottom, tip forward
+  }
+  function itemFix(g){if(g.type==='gun')gunFix(g);else if(g.type==='knife')knifeFix(g);}
+  function setGroup(b,gi){for(var f=b.getFixtureList();f;f=f.getNext())f.setFilterData({groupIndex:gi,categoryBits:1,maskBits:0xFFFF});}
+  function unstick(g,yank){ // pulled out (or the part it was in is gone)
+    var S=g.stuck;if(!S)return;g.stuck=null;try{world.destroyJoint(S.j);}catch(e){}
+    g.ghost=0.25; // stays passing through that body a moment so it doesn't catch on the way out
+    if(yank&&opt('oGore')&&rigs.indexOf(S.r)>=0){var p=g.b.getWorldPoint(Vec2(0.08,0)),d=g.b.getWorldVector(Vec2(-1,0));gL=layerK(S.r,S.k);gush(p.x,p.y,d.x*1.5,d.y*1.5,40,2,0.8);sfx('squelch');S.r.painS=Math.min(2,(S.r.painS||0)+0.3);}
   }
   var mq=[],midN=0;
   function meleeContact(c){
@@ -1567,6 +1578,12 @@ var RS=(function(){
     mq.push({g:g,fp:(wf.getUserData()||{}).part,r:H.r,k:H.k,p:Vec2(p.x,p.y),sn:sn,st:st,d:Vec2(rx/(st||1),ry/(st||1))});
   }
   function meleeStep(){
+    for(var ii=0;ii<items.length;ii++){var gi2=items[ii];
+      if(gi2.ghost>0){gi2.ghost-=RS.DT||1/240;if(gi2.ghost<=0&&!gi2.stuck)setGroup(gi2.b,0);}
+      var S=gi2.stuck;if(!S)continue;
+      if(rigs.indexOf(S.r)<0||(S.k<S.r.bodies.length&&S.k>=4&&S.r.inj&&S.r.inj.gone[S.k-1])){unstick(gi2,false);continue;}
+      if(drag&&drag.body===gi2.b){var wp=gi2.b.getWorldPoint(drag.local);if(Math.hypot(drag.target.x-wp.x,drag.target.y-wp.y)>0.22)unstick(gi2,true);} // yanked out
+    }
     if(!mq.length)return;var q=mq;mq=[];var now=performance.now();
     q.forEach(function(h){
       var g=h.g,r=h.r,k=h.k;if(rigs.indexOf(r)<0)return;var key=(r.mid||(r.mid=++midN))+'_'+k;if(g.cd[key]&&now-g.cd[key]<250)return;
@@ -1577,23 +1594,29 @@ var RS=(function(){
         if(gore){gL=layerK(r,k);addDecal(r,k,h.p,0.02+0.004*sp);}
         if(k>=nb)return;
         if(k===0){
-          if(sp>6*f&&RS.FLAGS.death!==0){if(!r.dead){r.dead=true;r.ev.push({t:'crush',k:0,d:sp});}}
-          else if(sp>3.5*f&&!r.dead){r.koT=Math.max(r.koT||0,4+sp*0.5);r.koWhy='head';sfx('crunch',false);}
+          if(sp>5*f&&RS.FLAGS.death!==0){if(!r.dead){r.dead=true;r.ev.push({t:'crush',k:0,d:sp});}}
+          else if(sp>3*f&&!r.dead){r.koT=Math.max(r.koT||0,4+sp*0.5);r.koWhy='head';sfx('crunch',false);}
           return;
         }
         if(k>=4){var j=k-1;if(!r.inj||r.inj.gone[j])return;f*=[1,0.9,0.8,1.5,1.15,0.9][(k-4)%6]; // the thigh bone takes the most
-          if(sp>8*f){r.ev.push({t:'crush',k:j,d:sp});if(RS.FLAGS.shatter&&RS.FLAGS.sever)RS.shatter(r,j,sp>13*f);else RS.breakBone(r,j,true);}
-          else if(sp>3*f&&!r.inj.broken[j]){RS.breakBone(r,j,true);}
+          if(sp>5.5*f){r.ev.push({t:'crush',k:j,d:sp});if(RS.FLAGS.shatter&&RS.FLAGS.sever)RS.shatter(r,j,sp>9*f);else RS.breakBone(r,j,true);} // crushed (shattered into pieces on Heavy/Full gore)
+          else if(sp>2.5*f&&!r.inj.broken[j]){RS.breakBone(r,j,true);}
           return;
         }
         // torso: knocked down; hard enough breaks ribs/spine and bleeds inside (stays down)
-        if(sp>4*f&&!r.dead){var lp=r.bodies[k].getLocalPoint(h.p),bad=sp>7*f;
+        if(sp>3.5*f&&!r.dead){var lp=r.bodies[k].getLocalPoint(h.p),bad=sp>6*f;
           if(bad){if(k<3)RS.breakBone(r,k,true);if(RS.FLAGS.bleed)r.holes=(r.holes||0)+1.5;sfx('crunch',true);}
           RS.shot(r,k,lp.x,lp.y,h.d.x,bad);}
       }else{ // knife: only the blade cuts
-        if(h.fp!=='blade'||h.st<2)return;g.cd[key]=now;
-        var slash=h.st>1.6*h.sn;
+        if(h.fp!=='blade'||h.st<2||g.stuck||g.ghost>0)return;g.cd[key]=now;
+        var ax=g.b.getWorldVector(Vec2(1,0)),along=(h.d.x*ax.x+h.d.y*ax.y),stab=along>0.7&&h.st>2.5,slash=!stab;
         wound(r,k,h.p,h.d,{cut:1,s:h.st,slash:slash});
+        if(stab&&rigs.indexOf(r)>=0){ // point first: it goes in and stays there until you pull it out
+          var pb=partOf(r,k),gi=pb.getFixtureList().getFilterGroupIndex();
+          var dep=Math.max(0.03,Math.min(0.07,0.012*h.st));var bp=g.b.getPosition();g.b.setTransform(Vec2(bp.x+ax.x*dep,bp.y+ax.y*dep),g.b.getAngle());
+          g.stuck={r:r,k:k,gi:gi,j:null};setGroup(g.b,gi);g.b.setLinearVelocity(pb.getLinearVelocity());g.b.setAngularVelocity(pb.getAngularVelocity());
+          g.stuck.j=world.createJoint(planck.WeldJoint({frequencyHz:0},pb,g.b,h.p));sfx('squelch');
+        }
         if(k>=4&&k<nb&&h.st>7*f&&RS.FLAGS.sever&&gore){var jj=k-1,ty=(k-4)%6;if(ty===2||ty===5||ty===1||ty===4){if(r.inj&&!r.inj.gone[jj])RS.sever(r,jj);}} // a hard chop takes off a hand, foot, forearm or shin
       }
     });
@@ -1650,14 +1673,19 @@ var RS=(function(){
       r.bodies.forEach(function(bq,q){var w2=q===k?2.2:kv;if(ext&&Math.abs(q-k)>1)return;if(ext)w2=q===k?2:1;var v=bq.getLinearVelocity();bq.setLinearVelocity(Vec2(v.x+kx*w2,v.y+ky*w2*0.5));bq.setAwake(true);});
     }
     }
-  function drawItems(){
+  function drawItems(under){ // under: knives stuck in someone go beneath the bodies so only the handle shows
     items.forEach(function(g){
-      var b=g.b;
+      if(under)return;
+      var b=g.b,clipd=false;
+      if(g.stuck&&rigs.indexOf(g.stuck.r)>=0){ // stuck in someone: hide the part of the blade that's inside them
+        var pb=partOf(g.stuck.r,g.stuck.k);if(pb){ctx.save();clipd=true;ctx.beginPath();ctx.rect(0,0,W,H);
+          for(var fq=pb.getFixtureList();fq;fq=fq.getNext()){polyPath(pb,fq.getShape());ctx.closePath();}ctx.clip('evenodd');}}
       if(g.type!=='gun'){ // each fixture its own colour: wood handle, steel head / blade
         for(var f0=b.getFixtureList();f0;f0=f0.getNext()){var vs0=f0.getShape().m_vertices,pt=(f0.getUserData()||{}).part;ctx.beginPath();
           for(var i0=0;i0<vs0.length;i0++){var q0=toScreen(b.getWorldPoint(vs0[i0]));if(i0)ctx.lineTo(q0.x,q0.y);else ctx.moveTo(q0.x,q0.y);}ctx.closePath();
           ctx.fillStyle=pt==='handle'?(g.type==='knife'?'#2a2622':'#6b4a2c'):pt==='blade'?'#a9b0b6':'#5b5e62';ctx.fill();ctx.strokeStyle='#100e0c';ctx.lineWidth=Math.max(1,0.005*cam.z);ctx.stroke();}
-        if(g.type==='knife'){var e1=toScreen(b.getWorldPoint(Vec2(0.005,-0.01))),e2=toScreen(b.getWorldPoint(Vec2(0.13,-0.005)));ctx.strokeStyle='rgba(230,240,250,0.8)';ctx.lineWidth=Math.max(1,0.003*cam.z);ctx.beginPath();ctx.moveTo(e1.x,e1.y);ctx.lineTo(e2.x,e2.y);ctx.stroke();}
+        if(g.type==='knife'&&!g.stuck){var e1=toScreen(b.getWorldPoint(Vec2(0.005,-0.01))),e2=toScreen(b.getWorldPoint(Vec2(0.13,-0.005)));ctx.strokeStyle='rgba(230,240,250,0.8)';ctx.lineWidth=Math.max(1,0.003*cam.z);ctx.beginPath();ctx.moveTo(e1.x,e1.y);ctx.lineTo(e2.x,e2.y);ctx.stroke();}
+        if(clipd)ctx.restore();
         return;
       }
       ctx.beginPath();
@@ -1666,6 +1694,7 @@ var RS=(function(){
       var s1=toScreen(b.getWorldPoint(Vec2(-0.07,0.028*g.s))),s2=toScreen(b.getWorldPoint(Vec2(0.1,0.028*g.s))); // slide highlight
       ctx.strokeStyle='rgba(255,176,32,0.35)';ctx.lineWidth=Math.max(1,0.004*cam.z);ctx.beginPath();ctx.moveTo(s1.x,s1.y);ctx.lineTo(s2.x,s2.y);ctx.stroke();
     });
+    if(under)return;
     for(var i=fx.length-1;i>=0;i--){var e=fx[i];
       if(e.t==='tracer'){var a=toScreen(e.a),c=toScreen(e.b);ctx.strokeStyle='rgba(255,220,150,'+(e.life/0.09)+')';ctx.lineWidth=Math.max(1,0.006*cam.z);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(c.x,c.y);ctx.stroke();}
       else{var p=toScreen(e.p),r0=0.06*cam.z*(e.life/0.06),ang=Math.atan2(-e.d.y,e.d.x);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(ang);
@@ -1723,10 +1752,11 @@ var RS=(function(){
     var b=drag.body;b.setAwake(true);
     var wp=b.getWorldPoint(drag.local),v=b.getLinearVelocityFromWorldPoint(wp);
     var ax=120*(drag.target.x-wp.x)-22*v.x,ay=120*(drag.target.y-wp.y)-22*v.y;
-    var mag=Math.sqrt(ax*ax+ay*ay);if(mag>80){ax*=80/mag;ay*=80/mag;}
+    var cap=itemOf(b)?300:80; // swinging a weapon: it can be whipped round much faster than a body
+    var mag=Math.sqrt(ax*ax+ay*ay);if(mag>cap){ax*=cap/mag;ay*=cap/mag;}
     var m=Math.max(drag.mass,b.getMass());
     b.applyForce(Vec2(ax*m,ay*m),wp,true);
-    var g=gunOf(b);if(g){var e=g.aim-b.getAngle();e=Math.atan2(Math.sin(e),Math.cos(e));b.setAngularVelocity(30*e);}
+    var g=aimOf(b);if(g&&g.aim!=null&&!g.stuck){var e=g.aim-b.getAngle();e=Math.atan2(Math.sin(e),Math.cos(e));b.setAngularVelocity(30*e);}
   }
 
   var ptrs={},mode='none',pan=null,pinch=null;
@@ -1744,14 +1774,14 @@ var RS=(function(){
     e.preventDefault();
     try{cv.setPointerCapture(e.pointerId);}catch(_){}
     ptrs[e.pointerId]=pos(e);
-    if(ids().length>=2&&mode==='drag'&&drag&&gunOf(drag.body)&&!trig){var tg=gunOf(drag.body);trig={id:e.pointerId,g:tg};clearTimeout(holdT);tap=null;aimAt(tg,toWorld(ptrs[e.pointerId].x,ptrs[e.pointerId].y));return;}
+    if(ids().length>=2&&mode==='drag'&&drag&&aimOf(drag.body)&&!trig){var tg=aimOf(drag.body);trig={id:e.pointerId,g:tg};clearTimeout(holdT);tap=null;aimAt(tg,toWorld(ptrs[e.pointerId].x,ptrs[e.pointerId].y));return;}
     if(ids().length>=2){startPinch();return;}
     var p=ptrs[e.pointerId],h=pick(p.x,p.y);
     if(h){
       var wp=toWorld(h.sx,h.sy);
       drag={body:h.b,local:h.b.getLocalPoint(wp),target:toWorld(p.x,p.y),mass:islandMass(h.b)};
       mode='drag';tap={id:e.pointerId,t:performance.now(),x:p.x,y:p.y,b:h.b};
-      var hg=gunOf(h.b);if(hg){hg.aim=h.b.getAngle();var hs=Math.cos(hg.aim)<0?-1:1;if(hs!==hg.s){hg.s=hs;gunFix(hg);}}
+      var hg=aimOf(h.b);if(hg){hg.aim=h.b.getAngle();var hs=Math.cos(hg.aim)<0?-1:1;if(hs!==hg.s){hg.s=hs;itemFix(hg);}}
       var r0=rigOf(h.b),p0={x:p.x,y:p.y};clearTimeout(holdT);
       holdT=setTimeout(function(){var q=ptrs[e.pointerId];if(r0&&mode==='drag'&&q&&Math.hypot(q.x-p0.x,q.y-p0.y)<10){drag=null;mode='none';openMenu(r0,q);}},600);
     }else{mode='pan';pan={x:p.x,y:p.y};camFollow=null;}
@@ -1771,7 +1801,7 @@ var RS=(function(){
   });
   function up(e){
     clearTimeout(holdT);
-    if(trig&&trig.id===e.pointerId){var tq=ptrs[e.pointerId],tg=trig.g;if(tq)aimAt(tg,toWorld(tq.x,tq.y));tg.b.setTransform(tg.b.getPosition(),tg.aim);tg.b.setAngularVelocity(0);fire(tg);trig=null;delete ptrs[e.pointerId];return;}
+    if(trig&&trig.id===e.pointerId){var tq=ptrs[e.pointerId],tg=trig.g;if(tq)aimAt(tg,toWorld(tq.x,tq.y));if(tg.type==='gun'){tg.b.setTransform(tg.b.getPosition(),tg.aim);tg.b.setAngularVelocity(0);fire(tg);}trig=null;delete ptrs[e.pointerId];return;}
     if(tap&&tap.id===e.pointerId){var q=ptrs[e.pointerId];
       if(q&&performance.now()-tap.t<350&&Math.hypot(q.x-tap.x,q.y-tap.y)<12)items.forEach(function(g){if(g.b===tap.b&&g.type==='gun')fire(g);});tap=null;}
     delete ptrs[e.pointerId];
