@@ -203,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.19 hotfix 1</div>
+  <div class="ver">beta v0.2.20</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -223,7 +223,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.19 hotfix 1</div>
+  <div class="ver">beta v0.2.20</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1564,6 +1564,11 @@ var RS=(function(){
   function setGroup(b,gi){for(var f=b.getFixtureList();f;f=f.getNext())f.setFilterData({groupIndex:gi,categoryBits:1,maskBits:0xFFFF});}
   function unstick(g,yank){ // pulled out (or the part it was in is gone)
     var S=g.stuck;if(!S)return;g.stuck=null;try{world.destroyJoint(S.j);}catch(e){}
+    var P=S.pend,R2=S.r;if(P&&rigs.indexOf(R2)>=0){ // the wound opens now it's out
+      if(P.hw&&RS.FLAGS.bleed)R2.holes=(R2.holes||0)+P.hw;
+      if(P.hole){(R2.hole||(R2.hole=[])).push(P.hole);if(opt('oGore')&&P.hole.k<R2.bodies.length+(R2.chunks?R2.chunks.length:0)){var wp2=partOf(R2,P.hole.k).getWorldPoint(Vec2(P.hole.x,P.hole.y));addDecal(R2,P.hole.k,wp2,0.03);splats(R2,P.hole.k,2,0.02);}}
+      if(P.heart&&!R2.heart)R2.heart=P.heart;
+    }
     g.ghost=0.25; // stays passing through that body a moment so it doesn't catch on the way out
     if(yank&&opt('oGore')&&rigs.indexOf(S.r)>=0){var p=g.b.getWorldPoint(Vec2(0.08,0)),d=g.b.getWorldVector(Vec2(-1,0));gL=layerK(S.r,S.k);gush(p.x,p.y,d.x*1.5,d.y*1.5,40,2,0.8);sfx('squelch');S.r.painS=Math.min(2,(S.r.painS||0)+0.3);}
   }
@@ -1611,11 +1616,12 @@ var RS=(function(){
       }else{ // knife: only the blade cuts
         if(h.fp!=='blade'||h.st<2||g.stuck||g.ghost>0)return;g.cd[key]=now;
         var ax=g.b.getWorldVector(Vec2(1,0)),along=(h.d.x*ax.x+h.d.y*ax.y),stab=along>0.7&&h.st>2.5,slash=!stab;
-        wound(r,k,h.p,h.d,{cut:1,s:h.st,slash:slash});
+        var pend=wound(r,k,h.p,h.d,{cut:1,s:h.st,slash:slash,stab:stab});
         if(stab&&rigs.indexOf(r)>=0){ // point first: it goes in and stays there until you pull it out
           var pb=partOf(r,k),gi=pb.getFixtureList().getFilterGroupIndex();
-          var dep=Math.max(0.03,Math.min(0.07,0.012*h.st));var bp=g.b.getPosition();g.b.setTransform(Vec2(bp.x+ax.x*dep,bp.y+ax.y*dep),g.b.getAngle());
-          g.stuck={r:r,k:k,gi:gi,j:null,t0:now};if(drag&&drag.body===g.b){var dw=g.b.getWorldPoint(drag.local);drag.target=Vec2(dw.x,dw.y);}setGroup(g.b,gi);g.b.setLinearVelocity(pb.getLinearVelocity());g.b.setAngularVelocity(pb.getAngularVelocity());
+          var base=g.b.getWorldPoint(Vec2(0,0)),dep=(h.p.x-base.x)*ax.x+(h.p.y-base.y)*ax.y,bp=g.b.getPosition(); // in to the hilt: the base of the blade sits where it went in
+          g.b.setTransform(Vec2(bp.x+ax.x*dep,bp.y+ax.y*dep),g.b.getAngle());
+          g.stuck={r:r,k:k,gi:gi,j:null,t0:now,pend:pend};if(drag&&drag.body===g.b){var dw=g.b.getWorldPoint(drag.local);drag.target=Vec2(dw.x,dw.y);}setGroup(g.b,gi);g.b.setLinearVelocity(pb.getLinearVelocity());g.b.setAngularVelocity(pb.getAngularVelocity());
           g.stuck.j=world.createJoint(planck.WeldJoint({frequencyHz:0},pb,g.b,h.p));sfx('squelch');
         }
         if(k>=4&&k<nb&&h.st>7*f&&RS.FLAGS.sever&&gore){var jj=k-1,ty=(k-4)%6;if(ty===2||ty===5||ty===1||ty===4){if(r.inj&&!r.inj.gone[jj])RS.sever(r,jj);}} // a hard chop takes off a hand, foot, forearm or shin
@@ -1642,14 +1648,14 @@ var RS=(function(){
   }
   // WOUND: a bullet (o.gun) or a blade (o.cut, o.s = speed) going into part k of rig r at world point hp, direction d
   function wound(r,k,hp,d,o){
-    var gore=opt('oGore'),gun=!!o.gun,cut=!!o.cut;
+    var gore=opt('oGore'),gun=!!o.gun,cut=!!o.cut,plug=!!o.stab,pend={}; // plug: the blade is still in, so it doesn't bleed until it comes out
     var nb=r.bodies.length,ext=k>=4&&k<nb&&((k-4)%6===2||(k-4)%6===5); // hand or foot
     sfx('squelch');r.painS=Math.min(2,(r.painS||0)+(ext?0.25:0.35));
     var sc=cut?0.7:1; // a stab bleeds a bit less than a bullet
     var lp=partOf(r,k).getLocalPoint(hp);
     if(gore){
-      gL=layerK(r,k);gush(hp.x,hp.y,-d.x*0.6,-d.y*0.6,14,1.2,0.6);if(gun)gush(hp.x,hp.y,d.x*2.5,d.y*2.5,30,2.4,0.5);else gush(hp.x,hp.y,d.x*0.8,d.y*0.8,22,1.6,0.6); // entry splash, exit spray
-      addDecal(r,k,hp,0.03);splats(r,k,2,0.02);
+      gL=layerK(r,k);if(!plug)gush(hp.x,hp.y,-d.x*0.6,-d.y*0.6,14,1.2,0.6);if(plug);else if(gun)gush(hp.x,hp.y,d.x*2.5,d.y*2.5,30,2.4,0.5);else gush(hp.x,hp.y,d.x*0.8,d.y*0.8,22,1.6,0.6); // entry splash, exit spray
+      if(!plug){addDecal(r,k,hp,0.03);splats(r,k,2,0.02);}
       var H2=r.holeK||(r.holeK={}),HL=H2[k]||(H2[k]=[]),pb2=partOf(r,k),jag=function(){var a=[];for(var q=0;q<10;q++)a.push(0.7+Math.random()*0.6);return a;};
       if(cut){var dl=pb2.getLocalVector(d);HL.push({x:lp.x,y:lp.y,r:0.012+Math.random()*0.004,j:jag(),a:0,cut:1,ca:Math.atan2(dl.y,dl.x)+Math.PI/2+(Math.random()-0.5)*0.6,len:o.slash?2.6:1.6});}
       else HL.push({x:lp.x,y:lp.y,r:0.017+Math.random()*0.004,j:jag(),a:Math.random()*6.28});
@@ -1657,14 +1663,15 @@ var RS=(function(){
       var fx2=null;for(var f2=pb2.getFixtureList();f2;f2=f2.getNext())if(f2.testPoint(Vec2(hp.x+d.x*0.004,hp.y+d.y*0.004))){fx2=f2;break;}
       if(gun&&fx2){var ex=hp.x,ey=hp.y;for(var st=0;st<80;st++){var nx=ex+d.x*0.004,ny=ey+d.y*0.004;if(!fx2.testPoint(Vec2(nx,ny)))break;ex=nx;ey=ny;}
         var le=pb2.getLocalPoint(Vec2(ex,ey));HL.push({x:le.x,y:le.y,r:0.023+Math.random()*0.006,j:jag(),a:Math.random()*6.28,exit:1});addDecal(r,k,Vec2(ex,ey),0.04);}
-      (r.hole||(r.hole=[])).push({k:k,x:lp.x,y:lp.y});
+      if(plug)pend.hole={k:k,x:lp.x,y:lp.y};else (r.hole||(r.hole=[])).push({k:k,x:lp.x,y:lp.y});
     }
     // where it went in: the heart sits in the middle-front of the chest; chest (lungs), gut and pelvis hits are fatal over time
     var Sc=r.scale||1,fr=lp.x*(r.dir||1),heart=k===1&&lp.y>-0.09*Sc&&lp.y<0.05*Sc&&fr>-0.03*Sc;
-    if(heart&&!r.heart){r.heart={x:lp.x,y:lp.y};if(gore){gL=layerK(r,k);gush(hp.x,hp.y,-d.x*1.5,-d.y*1.5,60,2.6,0.8);}}
+    if(heart&&!r.heart&&plug)pend.heart={x:lp.x,y:lp.y};
+    else if(heart&&!r.heart){r.heart={x:lp.x,y:lp.y};if(gore){gL=layerK(r,k);gush(hp.x,hp.y,-d.x*1.5,-d.y*1.5,60,2.6,0.8);}}
     var leg=k>=4&&k<nb&&((k-4)%6===3||(k-4)%6===4),thigh=k>=4&&k<nb&&(k-4)%6===3;
     var hw=ext?0.35:heart?10:k===1?5:k===2?3.2:k===3?2.4:thigh?2.2:1; // the thigh has the femoral artery // x0.25 = bleed weight (a torn-off leg is 1)
-    if(RS.FLAGS.bleed)r.holes=(r.holes||0)+hw*sc;
+    if(plug)pend.hw=hw*sc;else if(RS.FLAGS.bleed)r.holes=(r.holes||0)+hw*sc;
     if(k===0&&RS.FLAGS.death!==0&&!r.dead&&(gun||o.s>5)){r.dead=true;r.ev=r.ev||[];} // a knife to the head kills only when driven in hard
     else if(gun&&k>=4&&k<nb&&!ext&&r.inj){var j=k-1;var pb=RS.FLAGS.realism===0?0.8:RS.FLAGS.realism===2?0.35:0.5;
       if(!r.inj.broken[j]&&!r.inj.gone[j]&&Math.random()<pb)RS.breakBone(r,j,true);}
@@ -1673,6 +1680,7 @@ var RS=(function(){
       var kv=ext?0:k===0?1.6:k<4?2.2:1.4,kx=d.x,ky=Math.max(-0.3,d.y)+0.15;
       r.bodies.forEach(function(bq,q){var w2=q===k?2.2:kv;if(ext&&Math.abs(q-k)>1)return;if(ext)w2=q===k?2:1;var v=bq.getLinearVelocity();bq.setLinearVelocity(Vec2(v.x+kx*w2,v.y+ky*w2*0.5));bq.setAwake(true);});
     }
+    return pend;
     }
   function drawItems(under){ // under: knives stuck in someone go beneath the bodies so only the handle shows
     items.forEach(function(g){
