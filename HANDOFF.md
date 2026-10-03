@@ -325,3 +325,10 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Push the handle forward to drive it deeper; it gets harder the deeper it goes, and going deeper hurts (painS). Pull back until the tip's out, or yank hard (finger more than 0.35 m back along the handle), to remove it.
 - On removal the bleed weight is scaled `0.3+1.2*depthFrac`; heart only if depthFrac >= 0.45 (otherwise chest weight). Head: tip past `KBRAIN`=0.08 m = fatal brain injury (seizure, fade, death); shallower = brain damage when pulled out.
 - Holding a stuck knife uses `KHAND`=1 kg of drag with a 40 m/s² cap (it used to tear the joint about). Knife density raised ×5 (~0.1 kg) for joint stability. `hit()` checks items first, so a stuck knife is grabbed rather than the arm behind it.
+
+## v0.2.23 — grabs stick to the finger
+- `applyDrag` now drives a planck MouseJoint (ground to the grabbed body) instead of an explicit force spring. The old spring (120/s², damping 22, caps 80/300) lagged 0.26 m at slow drags and 1.75 m on a fast swipe; the joint lags about 4 cm, 8 cm and 21 cm.
+- Stiffness is 15 Hz on bodies and 25 Hz on items. Max force is `cap*mass`: bodies cap 250 (with islandMass ≈1.8 kg, about 450 N), items cap 600, stuck knife 40 (KHAND=1).
+- Pushing a stuck knife deeper uses a soft 3 Hz hand, so how far past the handle you push sets the force. Pulling it out is firm (25 Hz).
+- A hard yank (about 20+ m/s finger) now tears limbs off through the existing joint-pull sever check. A violent drag by the chest can fling an arm off too.
+- The hammer can now be swung much faster (it follows the finger), so crushes are easier.

@@ -203,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.22</div>
+  <div class="ver">beta v0.2.23</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -223,7 +223,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.22</div>
+  <div class="ver">beta v0.2.23</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1800,17 +1800,19 @@ var RS=(function(){
     }
     return m;
   }
+  var mj=null,mjB=null,mjW=null; // the finger: a stiff mouse joint (solved implicitly, so it can be stiff without blowing up)
   function applyDrag(){
+    if(mj&&(!drag||drag.body!==mjB||mjW!==world)){if(mjW===world)try{world.destroyJoint(mj);}catch(e){}mj=null;mjB=null;}
     if(!drag)return;
     var b=drag.body;b.setAwake(true);
-    var wp=b.getWorldPoint(drag.local),v=b.getLinearVelocityFromWorldPoint(wp);
-    var ax=120*(drag.target.x-wp.x)-22*v.x,ay=120*(drag.target.y-wp.y)-22*v.y;
-    var ib=itemOf(b),cap=ib?(ib.stuck?40:300):80; // a stuck knife: about 40 N of hand, or the joint gets torn about by the force // swinging a weapon: it can be whipped round much faster than a body
-    var mag=Math.sqrt(ax*ax+ay*ay);if(mag>cap){ax*=cap/mag;ay*=cap/mag;}
-    var m=Math.max(drag.mass,b.getMass());
-    b.applyForce(Vec2(ax*m,ay*m),wp,true);
+    var ib=itemOf(b),m=Math.max(drag.mass,b.getMass());
+    var cap=ib?(ib.stuck?40:600):250; // max accel the hand gives (x mass): a stuck knife gets about 40 N, or the joint gets torn about; a body gets yanked hard enough to rip limbs off
+    if(!mj){var wp=b.getWorldPoint(drag.local);mj=world.createJoint(planck.MouseJoint({maxForce:cap*m,frequencyHz:ib?25:15,dampingRatio:0.9},ground,b,wp));mjB=b;mjW=world;}
+    mj.setMaxForce(cap*m);var soft=false;if(ib&&ib.stuck){var wq=b.getWorldPoint(drag.local),bx=b.getWorldVector(Vec2(1,0));soft=(drag.target.x-wq.x)*bx.x+(drag.target.y-wq.y)*bx.y>0;} // pushing a stuck knife in: held softly, so how far you push sets how hard it goes in; pulling it out: firm
+    mj.setFrequency(soft?3:ib?25:15);mj.setTarget(drag.target);
     var g=aimOf(b);if(g&&g.aim!=null&&!g.stuck){var e=g.aim-b.getAngle();e=Math.atan2(Math.sin(e),Math.cos(e));b.setAngularVelocity(30*e);}
   }
+
 
   var ptrs={},mode='none',pan=null,pinch=null;
   function ids(){return Object.keys(ptrs);}
