@@ -305,3 +305,7 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 ## v0.2.19 hotfix 1 — Knife went straight through
 - Cause: a stab happens mid-drag, so the drag target was already well past the knife; the next step saw a >22 cm stretch and counted it as pulling the knife out, then the 0.25 s pass-through let it slide through the body.
 - Fix: on sticking, the drag target snaps to the knife; it only pulls out after 350 ms and only when the finger pulls back along the handle (>20 cm behind it). Pushing deeper or sideways keeps it in.
+
+## v0.2.20 — Knife goes in to the hilt, bleeds when pulled out
+- A stab moves the knife so the base of the blade sits where it went in (whole blade inside; only the handle shows, clipped as before).
+- `wound(..., {stab:true})` plugs the wound: no gush, splats, ooze or bleed weight; it returns `pend` (bleed weight, ooze hole, heart) kept on `g.stuck.pend`. `unstick()` applies it when the knife comes out (plus the pull-out gush).
