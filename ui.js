@@ -293,7 +293,7 @@
         if(k===0){
           if(sp>7*f&&RS.FLAGS.death!==0){if(!r.dead){r.dead=true;r.ev.push({t:'crush',k:0,d:sp});}} // skull caved in
           else if(sp>5*f&&!r.dead){r.koT=Math.max(r.koT||0,4);r.koWhy='head';sfx('crunch',true);RS.brainHit(r,0,true);} // fractured skull: fits, then dies
-          else if(sp>3*f&&!r.dead){r.koT=Math.max(r.koT||0,4+sp*0.5);r.koWhy='head';sfx('crunch',false);RS.brainHit(r,0.1+0.25*(sp-3*f)/(2*f),false);}
+          else if(sp>4*f&&!r.dead){r.koT=Math.max(r.koT||0,3+sp*0.3);r.koWhy='head';sfx('crunch',false);RS.brainHit(r,0.1+0.25*(sp-3*f)/(2*f),false);}
           return;
         }
         if(k>=4){var j=k-1;if(!r.inj||r.inj.gone[j])return;f*=[1,0.9,0.8,1.5,1.15,0.9][(k-4)%6]; // the thigh bone takes the most
@@ -458,6 +458,14 @@
     if(!drag)return;
     var b=drag.body;b.setAwake(true);
     var ib=itemOf(b),m=Math.max(drag.mass,b.getMass());
+    if(!+$('rGrab').value){ // Smooth (default): the original soft spring pull, it trails the finger a bit
+      if(mj){try{world.destroyJoint(mj);}catch(e){}mj=null;mjB=null;}
+      var wp0=b.getWorldPoint(drag.local),v0=b.getLinearVelocityFromWorldPoint(wp0),t0=drag.target,tx=Math.max(-ARENA+0.02,Math.min(ARENA-0.02,t0.x)),ty=Math.max(0.02,t0.y); // still can't be pulled through the floor or a wall
+      var ax=120*(tx-wp0.x)-22*v0.x,ay=120*(ty-wp0.y)-22*v0.y,cp=ib?(ib.stuck?40:300):80,mg=Math.sqrt(ax*ax+ay*ay);if(mg>cp){ax*=cp/mg;ay*=cp/mg;}
+      b.applyForce(Vec2(ax*m,ay*m),wp0,true);
+      var g0=aimOf(b);if(g0&&g0.aim!=null&&!g0.stuck){var e0=g0.aim-b.getAngle();e0=Math.atan2(Math.sin(e0),Math.cos(e0));b.setAngularVelocity(30*e0);}
+      return;
+    }
     var cap=ib?(ib.stuck?40:600):250; // max accel the hand gives (x mass): a stuck knife gets about 40 N, or the joint gets torn about; a body gets yanked hard enough to rip limbs off
     if(!mj){var wp=b.getWorldPoint(drag.local);mj=world.createJoint(planck.MouseJoint({maxForce:cap*m,frequencyHz:ib?25:15,dampingRatio:0.9},ground,b,wp));mjB=b;mjW=world;}
     var tg=drag.target;tg=Vec2(Math.max(-ARENA+0.02,Math.min(ARENA-0.02,tg.x)),Math.max(0.02,tg.y)); // a finger below the floor or past a wall holds it against it, not through
@@ -545,17 +553,18 @@
     var cv=+$('rCrush').value,gl=+$('rGore').value,gv=goreV(),rl=+$('rReal').value;$('vCrush').textContent=cv;$('vReal').textContent=RNAME[rl];$('rDesc').textContent=RDESC[rl];$('vGore').textContent=GNAME[gl];
     $('oGore').checked=gv>0;GM=gv/10;
     $('gDesc').textContent=GDESC[gl];
-    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),goreL:gl,crush:cv,real:rl}));}catch(_){}
+    var gr=+$('rGrab').value;$('vGrab').textContent=gr?'Sticky':'Smooth';$('grDesc').textContent=gr?'Things stay stuck to your finger: fast swings, hard yanks rip limbs off.':'Things follow your finger with a soft, smoothed pull (the original feel).';
+    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),goreL:gl,crush:cv,real:rl,grab:gr}));}catch(_){}
     if(AC&&master)master.gain.value=opt('oSound')?0.9:0;
   }
-  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;if(so.goreL!=null)$('rGore').value=so.goreL;else if(so.goreLv!=null)$('rGore').value=Math.round(so.goreLv*0.4);else if(so.gore===false)$('rGore').value=0;if(so.crush!=null)$('rCrush').value=so.crush;if(so.real!=null)$('rReal').value=so.real;}}catch(_){}
+  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;if(so.goreL!=null)$('rGore').value=so.goreL;else if(so.goreLv!=null)$('rGore').value=Math.round(so.goreLv*0.4);else if(so.gore===false)$('rGore').value=0;if(so.crush!=null)$('rCrush').value=so.crush;if(so.real!=null)$('rReal').value=so.real;if(so.grab!=null)$('rGrab').value=so.grab;}}catch(_){}
   function pauseMenu(on){userPaused=on;$('pmenu').hidden=!on;setOn('bPause',on);}
   $('bPause').onclick=function(){pauseMenu(true);};
   $('mResume').onclick=function(){pauseMenu(false);};
   $('bSlowB').onclick=function(){tgl('oSlow');};
   $('mSound').onclick=$('sSound').onclick=function(){tgl('oSound');audioInit();};
   $('mSet').onclick=$('sSet').onclick=function(){$('smenu').hidden=false;};$('sDone').onclick=function(){$('smenu').hidden=true;};
-  $('rCrush').oninput=$('rGore').oninput=$('rReal').oninput=syncMenu;
+  $('rCrush').oninput=$('rGore').oninput=$('rReal').oninput=$('rGrab').oninput=syncMenu;
   $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];r.holeK=null;r.hole=null;r.holes=0;r.heart=null;});pauseMenu(false);};
   $('mMain').onclick=function(){pauseMenu(false);init();var sp=$('splash');sp.hidden=false;sp.style.opacity=1;};
   $('bPlay').onclick=function(){var sp=$('splash');sp.style.transition='opacity .4s';sp.style.opacity=0;setTimeout(function(){sp.hidden=true;},400);audioInit();
