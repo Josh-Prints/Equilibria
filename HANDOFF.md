@@ -309,3 +309,10 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 ## v0.2.20 — Knife goes in to the hilt, bleeds when pulled out
 - A stab moves the knife so the base of the blade sits where it went in (whole blade inside; only the handle shows, clipped as before).
 - `wound(..., {stab:true})` plugs the wound: no gush, splats, ooze or bleed weight; it returns `pend` (bleed weight, ooze hole, heart) kept on `g.stuck.pend`. `unstick()` applies it when the knife comes out (plus the pull-out gush).
+
+## v0.2.21 — brain damage, seizures, vegetable
+- `RS.brainHit(rig, amt, fatal)` (sim.js). `fatal` starts a dying clock `rig.bd`: ~1.1 s seizure, stiffness fades 1.1-3.5 s, blackout (KO) from 3.5 s, dead at 7 s (with death off: vegetable instead).
+- Non-fatal hits add to `rig.brain` (0-1) and may trigger a fit (`rig.seizT`). Brain > 0.3 = random seizures; brain >= 0.6 = vegetable (`rig.veg`: alive, limp, never wakes).
+- `seizure()` drives joint targets: 0.25 s tonic stiffening, then clonic jerking at 5-7 Hz per joint.
+- Sources: knife stab to head = fatal; knife slash to head = +0.15; hammer head hit > 5f = fatal, > 3f = KO + damage; hard head knocks add a little.
+- HUD shows Seizure / Vegetable / Brain dying. Heal clears it all.

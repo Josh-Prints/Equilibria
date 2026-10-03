@@ -775,7 +775,7 @@ var RS=(function(){
       if(!I.broken[k]&&!j.isLimitEnabled()){var a=j.getJointAngle();if(a>=j.getLowerLimit()&&a<=j.getUpperLimit())j.enableLimit(true);}
     }
     if(FLAGS.inj&&I.t>0.2&&(rig.impS||0)>9)breakBone(rig,rig.impSk===1?1:2,true); // landing flat and hard on the back/front: spine fracture
-    if(FLAGS.inj&&(rig.impH||0)>FLAGS.koImp&&!rig.dead){rig.koT=Math.max(rig.koT||0,5+3*(rig.impH-FLAGS.koImp));rig.koWhy='head';}
+    if(FLAGS.inj&&(rig.impH||0)>FLAGS.koImp&&!rig.dead){rig.koT=Math.max(rig.koT||0,5+3*(rig.impH-FLAGS.koImp));rig.koWhy='head';brainHit(rig,0.04*(rig.impH-FLAGS.koImp),false);}
     if(FLAGS.inj)pain(rig,dt);
   }
   function limp1(rig,q){rig.rs[q]=rig.stiff[q]=0.003;var a=rig.ctrls[q].j.getJointAngle();rig.tgt[q]=a;rig.ctrls[q].target=a;}
@@ -783,6 +783,26 @@ var RS=(function(){
     var I=rig.inj;if(!I)return;
     for(var k=0;k<NJ;k++)if(I.broken[k]||I.gone[k])KIDS[k].forEach(function(q){limp1(rig,q);});
     if(I.broken[1]||I.broken[2])[6,7,8,12,13,14].forEach(function(q){limp1(rig,q);});
+  }
+
+  // BRAIN DAMAGE (the page calls brainHit for blows and stabs to the head; hard falls on the head add a little).
+  //  rig.brain 0..1 builds up. Over 0.3 it gets random seizures; at 0.6 it's a vegetable: alive, never wakes, still seizes.
+  //  fatal (a blade through the brain, a skull-cracking blow): a ~1 s seizure, then it fades over a few seconds, blacks out
+  //  and dies about 7 s in (with death off it ends up a vegetable instead).
+  function brainHit(rig,amt,fatal){
+    if(rig.dead)return;
+    if(fatal){if(rig.bd==null){rig.bd=0;rig.seizT=Math.max(rig.seizT||0,1.1);rig.seizA=0;}return;}
+    rig.brain=Math.min(1,(rig.brain||0)+amt);
+    if(amt>0.12&&Math.random()<0.4+amt){rig.seizT=Math.max(rig.seizT||0,1.2+3*amt);rig.seizA=0;}
+    if(rig.brain>=0.6)rig.veg=true;
+  }
+  function seizure(rig,out,dt){ // stiff arching first, then violent rhythmic jerking of everything
+    rig.seizT-=dt;rig.seizA=(rig.seizA||0)+dt;var t=rig.seizA,tonic=t<0.25;
+    if(!rig.seizP){rig.seizP=[];for(var q=0;q<NJ;q++)rig.seizP.push(Math.random()*6.28);}
+    for(var k=0;k<NJ;k++){var j=JT[k],mid=(j.lo+j.hi)/2,amp=(j.hi-j.lo)*0.22;
+      var a=tonic?(k<3?0.3:mid*0.3):mid*0.25+amp*Math.sin(t*2*Math.PI*(5+(k%3))+rig.seizP[k]);
+      a=Math.max(j.lo,Math.min(j.hi,a));rig.rs[k]=rig.stiff[k]=tonic?1:0.85;rig.tgt[k]=a;rig.ctrls[k].target=a;}
+    rig.gu.ph=-1;rig.cowering=false;rig.seizing=true;return out;
   }
 
   // SHOT (the page's handgun calls shot()): how a hit person reacts for a few seconds.
@@ -924,7 +944,15 @@ var RS=(function(){
     if(FLAGS.inj||FLAGS.sever||rig.inj)injuries(rig,dt);
     if(rf&&(FLAGS.crush||FLAGS.bleed))crushBleed(rig,dt);
     if(rf&&FLAGS.die&&FLAGS.death!==0&&rig.impD>FLAGS.dieImp)rig.dead=true;
-    if(rig.dead)return goLimp(rig,out);
+    if(rig.dead){rig.seizing=false;return goLimp(rig,out);}
+    var bf=1; // brain: dying from it, random fits, vegetable
+    if(rig.bd!=null){rig.bd+=dt;if(rig.bd>1.1)bf=Math.max(0,1-(rig.bd-1.1)/2.4);
+      if(rig.bd>3.5){rig.koT=Math.max(rig.koT||0,0.5);rig.koWhy='brain';}
+      if(rig.bd>7){if(FLAGS.death!==0){rig.dead=true;ev(rig,'braindead',0);rig.seizing=false;return goLimp(rig,out);}rig.veg=true;rig.bd=null;}}
+    if((rig.brain||0)>0.3&&!(rig.seizT>0)&&Math.random()<dt*(0.02+0.08*rig.brain)){rig.seizT=1.5+2.5*Math.random();rig.seizA=0;}
+    if(rig.seizT>0)return seizure(rig,out,dt);
+    rig.seizing=false;
+    if(rig.veg){goLimp(rig,out);rig.ko=true;return out;} // a vegetable: breathing, nobody home
     if(rig.koT>0){rig.koT-=dt;if(rig.koT<=0){rig.age=0;rig.wakeT=4;rig.groggy=FLAGS.groggyT;}goLimp(rig,out);rig.ko=true;return out;} // knocked out: limp until it comes round
     rig.ko=false;
     // coming round after being out: muscles come back slowly (weak and floppy at first), no getting up until halfway
@@ -946,7 +974,7 @@ var RS=(function(){
       rig.tgt[k]+=(tt[k]-rig.tgt[k])*al;
       rig.ctrls[k].target=rig.tgt[k];
     }
-    if(gw<1)for(k=0;k<NJ;k++){rig.rs[k]=Math.min(rig.rs[k],gw);rig.stiff[k]=rig.rs[k];}
+    gw=Math.min(gw,bf);if(gw<1)for(k=0;k<NJ;k++){rig.rs[k]=Math.min(rig.rs[k],gw);rig.stiff[k]=rig.rs[k];}
     injLimp(rig);
     return out;
   }
@@ -1082,7 +1110,7 @@ var RS=(function(){
     return {mean:sum/all.length,best:best};
   }
 
-  return {JNAMES:JNAMES,shot:shot,breakBone:breakBone,sever:sever,shatter:shatter,hurt:hurt,DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},GU:GU,FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
+  return {JNAMES:JNAMES,shot:shot,brainHit:brainHit,breakBone:breakBone,sever:sever,shatter:shatter,hurt:hurt,DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},GU:GU,FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
     esNoise:esNoise,esStep:esStep,migrate:migrate,runEpisode:runEpisode,evalCandidate:evalCandidate,sampleScenario:sampleScenario,fk:fk,
     NP:NP,NI:NI,NO:NO,NJ:NJ,DT:DT,SUB:SUB,POLICY_HZ:POLICY_HZ,VEL_IT:VEL_IT,POS_IT:POS_IT,JT:JT,ORDER:ORDER,CASES:CASES,wrap:wrap};
 })();
