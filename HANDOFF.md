@@ -316,3 +316,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - `seizure()` drives joint targets: 0.25 s tonic stiffening, then clonic jerking at 5-7 Hz per joint.
 - Sources: knife stab to head = fatal; knife slash to head = +0.15; hammer head hit > 5f = fatal, > 3f = KO + damage; hard head knocks add a little.
 - HUD shows Seizure / Vegetable / Brain dying. Heal clears it all.
+
+## v0.2.21 hotfix 1 — pulled-out knife rocketing away
+- Grabbing a stuck knife sizes the drag force by `islandMass` (knife + whole welded body). After `unstick` that force hit the knife alone, ~110 m/s. `unstick` now resets `drag.mass` to the knife's own mass (~3 m/s, stays in hand).

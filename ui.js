@@ -247,6 +247,7 @@
       if(P.hole){(R2.hole||(R2.hole=[])).push(P.hole);if(opt('oGore')&&P.hole.k<R2.bodies.length+(R2.chunks?R2.chunks.length:0)){var wp2=partOf(R2,P.hole.k).getWorldPoint(Vec2(P.hole.x,P.hole.y));addDecal(R2,P.hole.k,wp2,0.03);splats(R2,P.hole.k,2,0.02);}}
       if(P.heart&&!R2.heart)R2.heart=P.heart;
     }
+    if(drag&&drag.body===g.b)drag.mass=g.b.getMass(); // was grabbed while welded in, so the pull was sized for the whole body: knife alone now or it rockets off
     g.ghost=0.25; // stays passing through that body a moment so it doesn't catch on the way out
     if(yank&&opt('oGore')&&rigs.indexOf(S.r)>=0){var p=g.b.getWorldPoint(Vec2(0.08,0)),d=g.b.getWorldVector(Vec2(-1,0));gL=layerK(S.r,S.k);gush(p.x,p.y,d.x*1.5,d.y*1.5,40,2,0.8);sfx('squelch');S.r.painS=Math.min(2,(S.r.painS||0)+0.3);}
   }
