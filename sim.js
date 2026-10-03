@@ -1,7 +1,7 @@
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:14,crushLimb:1,ripImp:1.6,shatter:1,strands:1,groggyT:5,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:7.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:14,crushLimb:1,ripImp:1.6,shatter:1,strands:1,groggyT:5,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -710,12 +710,13 @@ var RS=(function(){
     if(I)for(k=0;k<NJ;k++){if(I.broken[k])base+=k<3?0.25:k%3===0?0.18:0.12;else if(I.gone[k]&&(k%3===0||!I.gone[k-1]))base+=0.3;}
     rig.painS=Math.max(0,(rig.painS||0)-0.1*dt);rig.wakeT=Math.max(0,(rig.wakeT||0)-dt);
     rig.pain=Math.min(2,0.6*base+rig.painS);
-    if(rig.pain>1&&!rig.dead&&!(rig.koT>0)&&rig.wakeT<=0){rig.koT=6+4*Math.min(1,rig.pain-1);rig.koWhy='pain';rig.painS*=0.5;}
+    if(rig.pain>1.6&&!rig.dead&&!(rig.koT>0)&&rig.wakeT<=0){rig.koT=4+3*Math.min(1,(rig.pain-1.6)/0.4); // tougher: it takes a lot of pain to pass out
+      rig.koWhy='pain';rig.painS*=0.5;}
   }
   // CRUSH (FLAGS.crush): a limb part slammed into the ground hard enough is crushed (its joint breaks); harder still
   // and it's ripped off (with FLAGS.sever). A head slammed that hard is crushed: dead.
   // BLEED (FLAGS.bleed): each torn-off limb bleeds ~5%/s of its blood (heart pumping, slower as the blood runs out),
-  // broken bones a little. Under 45% it passes out, under 20% it's dead.
+  // open fractures a little. Under 35% it passes out, under 20% it's dead.
   // per-part crush thresholds (upper arm, forearm, hand, thigh, shin, foot): big parts barely change speed when they
   // hit (the rest of the body carries them), hands and feet slam hard, so each is set so all get crushed about as often
   // real-world impact speeds (m/s) that shatter each part (comminuted / crushed, not just a crack), roughly from
@@ -750,7 +751,7 @@ var RS=(function(){
       rig.bleedW=w;
       rig.blood=Math.max(0,rig.blood-(FLAGS.bleedMul==null?1:FLAGS.bleedMul)*0.05*w*(0.3+0.7*rig.blood)*(rig.dead?0.3:1)*dt);
       if(rig.blood<0.2&&!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'bledout',0);}
-      else if(rig.blood<0.45&&!rig.dead){rig.koT=Math.max(rig.koT||0,0.5);rig.koWhy='blood';}
+      else if(rig.blood<0.35&&!rig.dead){rig.koT=Math.max(rig.koT||0,0.5);rig.koWhy='blood';}
     }
   }
   function strandStep(rig,dt){ // strands stretch while pulled hard (and slowly sag under a dangling limb's weight), then snap
@@ -778,7 +779,7 @@ var RS=(function(){
       if(!I.broken[k]&&!j.isLimitEnabled()){var a=j.getJointAngle();if(a>=j.getLowerLimit()&&a<=j.getUpperLimit())j.enableLimit(true);}
     }
     if(FLAGS.inj&&I.t>0.2&&(rig.impS||0)>9)breakBone(rig,rig.impSk===1?1:2,true,(rig.impS-9)/6); // landing flat and hard on the back/front: spine fracture
-    if(FLAGS.inj&&(rig.impH||0)>FLAGS.koImp&&!rig.dead){rig.koT=Math.max(rig.koT||0,5+3*(rig.impH-FLAGS.koImp));rig.koWhy='head';brainHit(rig,0.04*(rig.impH-FLAGS.koImp),false);}
+    if(FLAGS.inj&&(rig.impH||0)>FLAGS.koImp&&!rig.dead){rig.koT=Math.max(rig.koT||0,3+2*(rig.impH-FLAGS.koImp));rig.koWhy='head';brainHit(rig,0.04*(rig.impH-FLAGS.koImp),false);}
     if(FLAGS.inj)pain(rig,dt);
   }
   function limp1(rig,q){rig.rs[q]=rig.stiff[q]=0.003;var a=rig.ctrls[q].j.getJointAngle();rig.tgt[q]=a;rig.ctrls[q].target=a;}

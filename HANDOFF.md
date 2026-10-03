@@ -337,3 +337,11 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - `breakBone(rig,k,on,sev)`: sev 0..1. Over 0.5 it's an open fracture (`inj.open[k]=1`): it gushes, leaves a decal, oozes and drips, and bleeds at weight 0.3 (was 0.05 for every break). At 0.5 or under it's closed: a crunch and a dark bruise dot, no blood.
 - Where sev comes from: load breaks use `(instant force/limit - 1)/1.5`; the spine-landing break uses `(impS-9)/6`; a hammer limb blow uses `(sp-2.5f)/3f`; a torso blow `(sp-6f)/3f`; crushes 1; a bullet's bone break 0 (the hole already bleeds). No sev given: random.
 - Arena: `ARENA`=30, walls at x=±30 (static fixtures on `ground`). The floor is now 20 m thick. The mouse-joint target is clamped above the floor and inside the walls. The camera x is clamped to the arena. Free items found under the floor or outside the walls pop back up.
+
+## v0.2.25 — tougher knockouts, Grab setting
+- Settings has a Grab slider: Smooth (default, the original v0.2.22 force spring) or Sticky (the v0.2.23 mouse joint). It's saved in `eqOpts.grab`. Both modes keep the target above the floor and inside the walls.
+- Harder to knock out:
+  - The pain KO threshold went from 1 to 1.6, and pain KOs now last 4-7 s (was 6-10). Two minor breaks no longer knock them out; three do.
+  - Head KO `koImp` went from 5.5 to 7.5, and lasts `3+2x` s (was `5+3x`).
+  - A hammer to the head knocks them out from 4f (was 3f).
+  - Blood loss KO is now under 35% (was 45%).

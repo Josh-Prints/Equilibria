@@ -203,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.24</div>
+  <div class="ver">beta v0.2.25</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -212,6 +212,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <div class="sl"><div class="slh"><span>Crush threshold</span><b id="vCrush">7</b></div><input type="range" id="rCrush" min="1" max="10" step="1" value="7"><div class="sld"><span>crushes easily</span><span>almost never</span></div></div>
   <div class="sl"><div class="slh"><span>Gore</span><b id="vGore">Full</b></div><input type="range" id="rGore" min="0" max="4" step="1" value="4"><div class="sld"><span>none</span><span>full</span></div></div>
   <div class="slx" id="gDesc"></div>
+  <div class="sl"><div class="slh"><span>Grab</span><b id="vGrab">Smooth</b></div><input type="range" id="rGrab" min="0" max="1" step="1" value="0"><div class="sld"><span>smooth</span><span>sticky</span></div><div class="slx" id="grDesc"></div></div>
   <nav><button id="sDone">Done</button></nav>
 </div>
 <div id="splash" class="gm">
@@ -223,7 +224,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.24</div>
+  <div class="ver">beta v0.2.25</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -232,7 +233,7 @@ var RS_DETW={"mu":[-0.0067241,-0.00027025,0.0024076,0.00022175,0.0021074,-0.0000
 var RS=(function(){
   'use strict';
   var Vec2=planck.Vec2,Box=planck.Box,FLAGS={air:0,land:0,fall:0,fallE:0.25,fallA:0.55,landT:0.3,landSL:0.7,landH:0.2,landK:-0.3,step:0,Ts:0.2,land_off:0.0,trig:0.12,clear:0.07,smooth:0,soft:0,softT:0.6,
-    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:5.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:14,crushLimb:1,ripImp:1.6,shatter:1,strands:1,groggyT:5,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
+    bal2:0,trig2:0.03,off2:0.0,max2:0.45,Ts2:0.25,clear2:0.09,lean2:1.0,trunk2:1.0,ank2:4,nn:0,getup:0,guArm:1,cower:0,cowerImp:3.5,die:0,dieImp:12,protect:0,inj:0,sever:0,koImp:7.5,dieHead:8.5,dieTorso:11.5,dieLimb:21,crush:0,crushImp:14,crushLimb:1,ripImp:1.6,shatter:1,strands:1,groggyT:5,bleed:0}; // step: legs go out when the capture point leaves the feet // fall/landing reflexes: experimental, off by default (they lowered the scores)
   // smooth: reward smooth, calm, human-like motion (jerk/acceleration penalties, stillness bonus)   soft: ease into the pose for softT s after spawning instead of snapping to it
   var DT=1/240,LIMF=0.35,TMAX=1,INERTIA_X=16,POLICY_HZ=120,SUB=2,VEL_IT=6,POS_IT=2,W0=3.24,FILT=0.6;
 
@@ -941,12 +942,13 @@ var RS=(function(){
     if(I)for(k=0;k<NJ;k++){if(I.broken[k])base+=k<3?0.25:k%3===0?0.18:0.12;else if(I.gone[k]&&(k%3===0||!I.gone[k-1]))base+=0.3;}
     rig.painS=Math.max(0,(rig.painS||0)-0.1*dt);rig.wakeT=Math.max(0,(rig.wakeT||0)-dt);
     rig.pain=Math.min(2,0.6*base+rig.painS);
-    if(rig.pain>1&&!rig.dead&&!(rig.koT>0)&&rig.wakeT<=0){rig.koT=6+4*Math.min(1,rig.pain-1);rig.koWhy='pain';rig.painS*=0.5;}
+    if(rig.pain>1.6&&!rig.dead&&!(rig.koT>0)&&rig.wakeT<=0){rig.koT=4+3*Math.min(1,(rig.pain-1.6)/0.4); // tougher: it takes a lot of pain to pass out
+      rig.koWhy='pain';rig.painS*=0.5;}
   }
   // CRUSH (FLAGS.crush): a limb part slammed into the ground hard enough is crushed (its joint breaks); harder still
   // and it's ripped off (with FLAGS.sever). A head slammed that hard is crushed: dead.
   // BLEED (FLAGS.bleed): each torn-off limb bleeds ~5%/s of its blood (heart pumping, slower as the blood runs out),
-  // broken bones a little. Under 45% it passes out, under 20% it's dead.
+  // open fractures a little. Under 35% it passes out, under 20% it's dead.
   // per-part crush thresholds (upper arm, forearm, hand, thigh, shin, foot): big parts barely change speed when they
   // hit (the rest of the body carries them), hands and feet slam hard, so each is set so all get crushed about as often
   // real-world impact speeds (m/s) that shatter each part (comminuted / crushed, not just a crack), roughly from
@@ -981,7 +983,7 @@ var RS=(function(){
       rig.bleedW=w;
       rig.blood=Math.max(0,rig.blood-(FLAGS.bleedMul==null?1:FLAGS.bleedMul)*0.05*w*(0.3+0.7*rig.blood)*(rig.dead?0.3:1)*dt);
       if(rig.blood<0.2&&!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'bledout',0);}
-      else if(rig.blood<0.45&&!rig.dead){rig.koT=Math.max(rig.koT||0,0.5);rig.koWhy='blood';}
+      else if(rig.blood<0.35&&!rig.dead){rig.koT=Math.max(rig.koT||0,0.5);rig.koWhy='blood';}
     }
   }
   function strandStep(rig,dt){ // strands stretch while pulled hard (and slowly sag under a dangling limb's weight), then snap
@@ -1009,7 +1011,7 @@ var RS=(function(){
       if(!I.broken[k]&&!j.isLimitEnabled()){var a=j.getJointAngle();if(a>=j.getLowerLimit()&&a<=j.getUpperLimit())j.enableLimit(true);}
     }
     if(FLAGS.inj&&I.t>0.2&&(rig.impS||0)>9)breakBone(rig,rig.impSk===1?1:2,true,(rig.impS-9)/6); // landing flat and hard on the back/front: spine fracture
-    if(FLAGS.inj&&(rig.impH||0)>FLAGS.koImp&&!rig.dead){rig.koT=Math.max(rig.koT||0,5+3*(rig.impH-FLAGS.koImp));rig.koWhy='head';brainHit(rig,0.04*(rig.impH-FLAGS.koImp),false);}
+    if(FLAGS.inj&&(rig.impH||0)>FLAGS.koImp&&!rig.dead){rig.koT=Math.max(rig.koT||0,3+2*(rig.impH-FLAGS.koImp));rig.koWhy='head';brainHit(rig,0.04*(rig.impH-FLAGS.koImp),false);}
     if(FLAGS.inj)pain(rig,dt);
   }
   function limp1(rig,q){rig.rs[q]=rig.stiff[q]=0.003;var a=rig.ctrls[q].j.getJointAngle();rig.tgt[q]=a;rig.ctrls[q].target=a;}
@@ -1646,7 +1648,7 @@ var RS=(function(){
         if(k===0){
           if(sp>7*f&&RS.FLAGS.death!==0){if(!r.dead){r.dead=true;r.ev.push({t:'crush',k:0,d:sp});}} // skull caved in
           else if(sp>5*f&&!r.dead){r.koT=Math.max(r.koT||0,4);r.koWhy='head';sfx('crunch',true);RS.brainHit(r,0,true);} // fractured skull: fits, then dies
-          else if(sp>3*f&&!r.dead){r.koT=Math.max(r.koT||0,4+sp*0.5);r.koWhy='head';sfx('crunch',false);RS.brainHit(r,0.1+0.25*(sp-3*f)/(2*f),false);}
+          else if(sp>4*f&&!r.dead){r.koT=Math.max(r.koT||0,3+sp*0.3);r.koWhy='head';sfx('crunch',false);RS.brainHit(r,0.1+0.25*(sp-3*f)/(2*f),false);}
           return;
         }
         if(k>=4){var j=k-1;if(!r.inj||r.inj.gone[j])return;f*=[1,0.9,0.8,1.5,1.15,0.9][(k-4)%6]; // the thigh bone takes the most
@@ -1811,6 +1813,14 @@ var RS=(function(){
     if(!drag)return;
     var b=drag.body;b.setAwake(true);
     var ib=itemOf(b),m=Math.max(drag.mass,b.getMass());
+    if(!+$('rGrab').value){ // Smooth (default): the original soft spring pull, it trails the finger a bit
+      if(mj){try{world.destroyJoint(mj);}catch(e){}mj=null;mjB=null;}
+      var wp0=b.getWorldPoint(drag.local),v0=b.getLinearVelocityFromWorldPoint(wp0),t0=drag.target,tx=Math.max(-ARENA+0.02,Math.min(ARENA-0.02,t0.x)),ty=Math.max(0.02,t0.y); // still can't be pulled through the floor or a wall
+      var ax=120*(tx-wp0.x)-22*v0.x,ay=120*(ty-wp0.y)-22*v0.y,cp=ib?(ib.stuck?40:300):80,mg=Math.sqrt(ax*ax+ay*ay);if(mg>cp){ax*=cp/mg;ay*=cp/mg;}
+      b.applyForce(Vec2(ax*m,ay*m),wp0,true);
+      var g0=aimOf(b);if(g0&&g0.aim!=null&&!g0.stuck){var e0=g0.aim-b.getAngle();e0=Math.atan2(Math.sin(e0),Math.cos(e0));b.setAngularVelocity(30*e0);}
+      return;
+    }
     var cap=ib?(ib.stuck?40:600):250; // max accel the hand gives (x mass): a stuck knife gets about 40 N, or the joint gets torn about; a body gets yanked hard enough to rip limbs off
     if(!mj){var wp=b.getWorldPoint(drag.local);mj=world.createJoint(planck.MouseJoint({maxForce:cap*m,frequencyHz:ib?25:15,dampingRatio:0.9},ground,b,wp));mjB=b;mjW=world;}
     var tg=drag.target;tg=Vec2(Math.max(-ARENA+0.02,Math.min(ARENA-0.02,tg.x)),Math.max(0.02,tg.y)); // a finger below the floor or past a wall holds it against it, not through
@@ -1898,17 +1908,18 @@ var RS=(function(){
     var cv=+$('rCrush').value,gl=+$('rGore').value,gv=goreV(),rl=+$('rReal').value;$('vCrush').textContent=cv;$('vReal').textContent=RNAME[rl];$('rDesc').textContent=RDESC[rl];$('vGore').textContent=GNAME[gl];
     $('oGore').checked=gv>0;GM=gv/10;
     $('gDesc').textContent=GDESC[gl];
-    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),goreL:gl,crush:cv,real:rl}));}catch(_){}
+    var gr=+$('rGrab').value;$('vGrab').textContent=gr?'Sticky':'Smooth';$('grDesc').textContent=gr?'Things stay stuck to your finger: fast swings, hard yanks rip limbs off.':'Things follow your finger with a soft, smoothed pull (the original feel).';
+    try{localStorage.setItem('eqOpts',JSON.stringify({sound:opt('oSound'),goreL:gl,crush:cv,real:rl,grab:gr}));}catch(_){}
     if(AC&&master)master.gain.value=opt('oSound')?0.9:0;
   }
-  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;if(so.goreL!=null)$('rGore').value=so.goreL;else if(so.goreLv!=null)$('rGore').value=Math.round(so.goreLv*0.4);else if(so.gore===false)$('rGore').value=0;if(so.crush!=null)$('rCrush').value=so.crush;if(so.real!=null)$('rReal').value=so.real;}}catch(_){}
+  try{var so=JSON.parse(localStorage.getItem('eqOpts')||'null');if(so){$('oSound').checked=so.sound;if(so.goreL!=null)$('rGore').value=so.goreL;else if(so.goreLv!=null)$('rGore').value=Math.round(so.goreLv*0.4);else if(so.gore===false)$('rGore').value=0;if(so.crush!=null)$('rCrush').value=so.crush;if(so.real!=null)$('rReal').value=so.real;if(so.grab!=null)$('rGrab').value=so.grab;}}catch(_){}
   function pauseMenu(on){userPaused=on;$('pmenu').hidden=!on;setOn('bPause',on);}
   $('bPause').onclick=function(){pauseMenu(true);};
   $('mResume').onclick=function(){pauseMenu(false);};
   $('bSlowB').onclick=function(){tgl('oSlow');};
   $('mSound').onclick=$('sSound').onclick=function(){tgl('oSound');audioInit();};
   $('mSet').onclick=$('sSet').onclick=function(){$('smenu').hidden=false;};$('sDone').onclick=function(){$('smenu').hidden=true;};
-  $('rCrush').oninput=$('rGore').oninput=$('rReal').oninput=syncMenu;
+  $('rCrush').oninput=$('rGore').oninput=$('rReal').oninput=$('rGrab').oninput=syncMenu;
   $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];r.holeK=null;r.hole=null;r.holes=0;r.heart=null;});pauseMenu(false);};
   $('mMain').onclick=function(){pauseMenu(false);init();var sp=$('splash');sp.hidden=false;sp.style.opacity=1;};
   $('bPlay').onclick=function(){var sp=$('splash');sp.style.transition='opacity .4s';sp.style.opacity=0;setTimeout(function(){sp.hidden=true;},400);audioInit();
