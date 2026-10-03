@@ -203,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.19</div>
+  <div class="ver">beta v0.2.19 hotfix 1</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -223,7 +223,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.19</div>
+  <div class="ver">beta v0.2.19 hotfix 1</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1582,7 +1582,8 @@ var RS=(function(){
       if(gi2.ghost>0){gi2.ghost-=RS.DT||1/240;if(gi2.ghost<=0&&!gi2.stuck)setGroup(gi2.b,0);}
       var S=gi2.stuck;if(!S)continue;
       if(rigs.indexOf(S.r)<0||(S.k<S.r.bodies.length&&S.k>=4&&S.r.inj&&S.r.inj.gone[S.k-1])){unstick(gi2,false);continue;}
-      if(drag&&drag.body===gi2.b){var wp=gi2.b.getWorldPoint(drag.local);if(Math.hypot(drag.target.x-wp.x,drag.target.y-wp.y)>0.22)unstick(gi2,true);} // yanked out
+      if(drag&&drag.body===gi2.b&&performance.now()-S.t0>350){var wp=gi2.b.getWorldPoint(drag.local),bx=gi2.b.getWorldVector(Vec2(-1,0)); // yanked out: only a pull back along the handle counts, pushing it deeper or sideways doesn't
+        if((drag.target.x-wp.x)*bx.x+(drag.target.y-wp.y)*bx.y>0.2)unstick(gi2,true);}
     }
     if(!mq.length)return;var q=mq;mq=[];var now=performance.now();
     q.forEach(function(h){
@@ -1614,7 +1615,7 @@ var RS=(function(){
         if(stab&&rigs.indexOf(r)>=0){ // point first: it goes in and stays there until you pull it out
           var pb=partOf(r,k),gi=pb.getFixtureList().getFilterGroupIndex();
           var dep=Math.max(0.03,Math.min(0.07,0.012*h.st));var bp=g.b.getPosition();g.b.setTransform(Vec2(bp.x+ax.x*dep,bp.y+ax.y*dep),g.b.getAngle());
-          g.stuck={r:r,k:k,gi:gi,j:null};setGroup(g.b,gi);g.b.setLinearVelocity(pb.getLinearVelocity());g.b.setAngularVelocity(pb.getAngularVelocity());
+          g.stuck={r:r,k:k,gi:gi,j:null,t0:now};if(drag&&drag.body===g.b){var dw=g.b.getWorldPoint(drag.local);drag.target=Vec2(dw.x,dw.y);}setGroup(g.b,gi);g.b.setLinearVelocity(pb.getLinearVelocity());g.b.setAngularVelocity(pb.getAngularVelocity());
           g.stuck.j=world.createJoint(planck.WeldJoint({frequencyHz:0},pb,g.b,h.p));sfx('squelch');
         }
         if(k>=4&&k<nb&&h.st>7*f&&RS.FLAGS.sever&&gore){var jj=k-1,ty=(k-4)%6;if(ty===2||ty===5||ty===1||ty===4){if(r.inj&&!r.inj.gone[jj])RS.sever(r,jj);}} // a hard chop takes off a hand, foot, forearm or shin
