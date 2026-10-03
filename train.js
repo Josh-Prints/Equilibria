@@ -633,14 +633,17 @@ var RS=(function(){
   var KIDS=[[0],[1],[2],[3,4,5],[4,5],[5],[6,7,8],[7,8],[8],[9,10,11],[10,11],[11],[12,13,14],[13,14],[14]];
   function injOf(rig){return rig.inj||(rig.inj={load:new Float64Array(NJ),pull:new Float64Array(NJ),broken:new Uint8Array(NJ),gone:new Uint8Array(NJ),blo:new Array(NJ).fill(null),bhi:new Array(NJ).fill(null),t:0});}
   function hurt(rig){var I=rig.inj;if(!I)return false;for(var k=0;k<NJ;k++)if(I.broken[k]||I.gone[k])return true;return false;}
-  function breakBone(rig,k,on){
+  // sev 0..1: how bad the break is. Over 0.5 it's an open (compound) fracture: bone through the skin, it bleeds.
+  //  Under that it's a closed break: a crack and a bent limb, no blood. (No sev given: a random one.)
+  function breakBone(rig,k,on,sev){
     var I=injOf(rig);if(I.gone[k]||!!I.broken[k]===!!on)return;
-    I.broken[k]=on?1:0;
+    I.broken[k]=on?1:0;if(!I.open)I.open=new Uint8Array(NJ);
+    if(sev==null)sev=Math.random();I.open[k]=on&&sev>0.5?1:0;
     if(on){ // a broken joint gets a random amount of extra range each way (not a free spin); pdRig softens the new ends
       var jt=JT[k],ex1=0.5+Math.random()*1.3,ex2=0.5+Math.random()*1.3,lo=jt.lo-ex1,hi=jt.hi+ex2,sp=hi-lo;
       if(sp>5.6){lo+=(sp-5.6)/2;hi-=(sp-5.6)/2;}
       I.blo[k]=lo;I.bhi[k]=hi;rig.ctrls[k].j.setLimits(lo,hi);rig.ctrls[k].j.enableLimit(true);
-      if(k===0&&FLAGS.death!==0)rig.dead=true;ev(rig,'break',k);}
+      if(k===0&&FLAGS.death!==0)rig.dead=true;ev(rig,'break',k,sev);}
     else rig.age=Math.min(rig.age,0.3); // healed: the limit comes back once the joint is inside its range again (below)
   }
   function addStrand(rig,k,A,B,la,lb,wt,o){ // a bundle of strings (one rope) between two bodies
@@ -747,13 +750,13 @@ var RS=(function(){
         var j=k-1;if(I.gone[j])continue;
         if(FLAGS.shatter&&FLAGS.sever){ev(rig,'crush',j,d);shatter(rig,j,d>lim*FLAGS.ripImp);}
         else if(FLAGS.sever&&d>lim*FLAGS.ripImp){ev(rig,'crush',j,d);sever(rig,j);}
-        else if(!I.broken[j]){ev(rig,'crush',j,d);breakBone(rig,j,true);}
+        else if(!I.broken[j]){ev(rig,'crush',j,d);breakBone(rig,j,true,1);}
       }
     }
     if(rig.blood==null)rig.blood=1;
     if(FLAGS.bleed&&rig.blood>0){
-      var w=0;for(k=3;k<NJ;k++){if(I.gone[k]&&(k===3||k===6||k===9||k===12||!I.gone[k-1]))w+=k%3===0?1:0.7;else if(I.broken[k])w+=0.05;}
-      if(I.broken[1]||I.broken[2])w+=0.1;
+      var w=0;for(k=3;k<NJ;k++){if(I.gone[k]&&(k===3||k===6||k===9||k===12||!I.gone[k-1]))w+=k%3===0?1:0.7;else if(I.broken[k]&&I.open&&I.open[k])w+=0.3;}
+      if((I.broken[1]&&I.open&&I.open[1])||(I.broken[2]&&I.open&&I.open[2]))w+=0.3;
       w+=(rig.holes||0)*0.25; // gunshot wounds (the page adds these)
       rig.bleedW=w;
       rig.blood=Math.max(0,rig.blood-(FLAGS.bleedMul==null?1:FLAGS.bleedMul)*0.05*w*(0.3+0.7*rig.blood)*(rig.dead?0.3:1)*dt);
@@ -779,13 +782,13 @@ var RS=(function(){
       I.load[k]+=(Math.hypot(F.x,F.y)-I.load[k])*0.08;
       I.pull[k]+=(Math.max(0,-(F.x*dx+F.y*dy)/dl)-I.pull[k])*0.08;
       if(I.t>0.2){ // not during the settle after spawning
-        if(FLAGS.inj&&!I.broken[k]&&I.load[k]>brkAt(k))breakBone(rig,k,true);
+        if(FLAGS.inj&&!I.broken[k]&&I.load[k]>brkAt(k))breakBone(rig,k,true,(Math.hypot(F.x,F.y)/brkAt(k)-1)/1.5);
         if(FLAGS.sever&&k>=3&&I.pull[k]>sevAt(k)){sever(rig,k);continue;}
       }
       if(!I.broken[k]&&I.blo[k]!=null){var a0=j.getJointAngle();if(a0>=JT[k].lo&&a0<=JT[k].hi){j.setLimits(JT[k].lo,JT[k].hi);I.blo[k]=I.bhi[k]=null;}else{I.blo[k]=Math.min(JT[k].lo,a0);I.bhi[k]=Math.max(JT[k].hi,a0);j.setLimits(I.blo[k],I.bhi[k]);}} // healed: normal range once back inside it
       if(!I.broken[k]&&!j.isLimitEnabled()){var a=j.getJointAngle();if(a>=j.getLowerLimit()&&a<=j.getUpperLimit())j.enableLimit(true);}
     }
-    if(FLAGS.inj&&I.t>0.2&&(rig.impS||0)>9)breakBone(rig,rig.impSk===1?1:2,true); // landing flat and hard on the back/front: spine fracture
+    if(FLAGS.inj&&I.t>0.2&&(rig.impS||0)>9)breakBone(rig,rig.impSk===1?1:2,true,(rig.impS-9)/6); // landing flat and hard on the back/front: spine fracture
     if(FLAGS.inj&&(rig.impH||0)>FLAGS.koImp&&!rig.dead){rig.koT=Math.max(rig.koT||0,5+3*(rig.impH-FLAGS.koImp));rig.koWhy='head';brainHit(rig,0.04*(rig.impH-FLAGS.koImp),false);}
     if(FLAGS.inj)pain(rig,dt);
   }

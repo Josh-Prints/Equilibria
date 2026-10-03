@@ -194,10 +194,12 @@
   // =====================================================================
   // LIVE WORLD
   // =====================================================================
+  var ARENA=30; // the arena runs from -30 m to +30 m, walls at each end
   function init(){
     world=new planck.World({gravity:Vec2(0,-10)});world.on('begin-contact',meleeContact);
     drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;camFollow=null;items=[];fx=[];trig=null;
-    ground=world.createBody();ground.createFixture(Box(1000,1,Vec2(0,-1),0),{friction:0.9});
+    ground=world.createBody();ground.createFixture(Box(ARENA+40,20,Vec2(0,-20),0),{friction:0.9}); // floor (20 m thick so nothing tunnels through it)
+    ground.createFixture(Box(20,60,Vec2(-ARENA-20,58),0),{friction:0.6});ground.createFixture(Box(20,60,Vec2(ARENA+20,58),0),{friction:0.6}); // walls
     spawn('stand');
   }
   var liveBufs=[];
@@ -295,13 +297,13 @@
           return;
         }
         if(k>=4){var j=k-1;if(!r.inj||r.inj.gone[j])return;f*=[1,0.9,0.8,1.5,1.15,0.9][(k-4)%6]; // the thigh bone takes the most
-          if(sp>5.5*f){r.ev.push({t:'crush',k:j,d:sp});if(RS.FLAGS.shatter&&RS.FLAGS.sever)RS.shatter(r,j,sp>9*f);else RS.breakBone(r,j,true);} // crushed (shattered into pieces on Heavy/Full gore)
-          else if(sp>2.5*f&&!r.inj.broken[j]){RS.breakBone(r,j,true);}
+          if(sp>5.5*f){r.ev.push({t:'crush',k:j,d:sp});if(RS.FLAGS.shatter&&RS.FLAGS.sever)RS.shatter(r,j,sp>9*f);else RS.breakBone(r,j,true,1);} // crushed (shattered into pieces on Heavy/Full gore)
+          else if(sp>2.5*f&&!r.inj.broken[j]){RS.breakBone(r,j,true,(sp-2.5*f)/(3*f));} // a harder blow: more likely the bone comes through the skin
           return;
         }
         // torso: knocked down; hard enough breaks ribs/spine and bleeds inside (stays down)
         if(sp>3.5*f&&!r.dead){var lp=r.bodies[k].getLocalPoint(h.p),bad=sp>6*f;
-          if(bad){if(k<3)RS.breakBone(r,k,true);if(RS.FLAGS.bleed)r.holes=(r.holes||0)+1.5;sfx('crunch',true);}
+          if(bad){if(k<3)RS.breakBone(r,k,true,(sp-6*f)/(3*f));if(RS.FLAGS.bleed)r.holes=(r.holes||0)+1.5;sfx('crunch',true);}
           RS.shot(r,k,lp.x,lp.y,h.d.x,bad);}
       }else{ // knife: only the blade cuts
         if(h.fp!=='blade'||h.st<2||g.stuck||g.ghost>0)return;g.cd[key]=now;
@@ -367,7 +369,7 @@
     if(k===0&&gun&&RS.FLAGS.death!==0&&!r.dead){r.dead=true;r.ev=r.ev||[];} // a bullet to the head: dead
     else if(k===0&&cut&&!plug&&!r.dead)RS.brainHit(r,0.15,false); // a blade into the skull: fits, fades out and dies; a slash: some damage
     else if(gun&&k>=4&&k<nb&&!ext&&r.inj){var j=k-1;var pb=RS.FLAGS.realism===0?0.8:RS.FLAGS.realism===2?0.35:0.5;
-      if(!r.inj.broken[j]&&!r.inj.gone[j]&&Math.random()<pb)RS.breakBone(r,j,true);}
+      if(!r.inj.broken[j]&&!r.inj.gone[j]&&Math.random()<pb)RS.breakBone(r,j,true,0);} // the bullet hole already bleeds
     if(k<nb&&!r.dead)RS.shot(r,k,lp.x,lp.y,d.x,k>=1&&k<=3||leg);
     if(gun&&k<nb){ // knocked back: the whole body gets shoved along the shot, hardest at the part that was hit (hands/feet: just that limb)
       var kv=ext?0:k===0?1.6:k<4?2.2:1.4,kx=d.x,ky=Math.max(-0.3,d.y)+0.15;
@@ -458,8 +460,9 @@
     var ib=itemOf(b),m=Math.max(drag.mass,b.getMass());
     var cap=ib?(ib.stuck?40:600):250; // max accel the hand gives (x mass): a stuck knife gets about 40 N, or the joint gets torn about; a body gets yanked hard enough to rip limbs off
     if(!mj){var wp=b.getWorldPoint(drag.local);mj=world.createJoint(planck.MouseJoint({maxForce:cap*m,frequencyHz:ib?25:15,dampingRatio:0.9},ground,b,wp));mjB=b;mjW=world;}
+    var tg=drag.target;tg=Vec2(Math.max(-ARENA+0.02,Math.min(ARENA-0.02,tg.x)),Math.max(0.02,tg.y)); // a finger below the floor or past a wall holds it against it, not through
     mj.setMaxForce(cap*m);var soft=false;if(ib&&ib.stuck){var wq=b.getWorldPoint(drag.local),bx=b.getWorldVector(Vec2(1,0));soft=(drag.target.x-wq.x)*bx.x+(drag.target.y-wq.y)*bx.y>0;} // pushing a stuck knife in: held softly, so how far you push sets how hard it goes in; pulling it out: firm
-    mj.setFrequency(soft?3:ib?25:15);mj.setTarget(drag.target);
+    mj.setFrequency(soft?3:ib?25:15);mj.setTarget(tg);
     var g=aimOf(b);if(g&&g.aim!=null&&!g.stuck){var e=g.aim-b.getAngle();e=Math.atan2(Math.sin(e),Math.cos(e));b.setAngularVelocity(30*e);}
   }
 
@@ -596,7 +599,7 @@
     RS.FLAGS.soft=0;
     var n=RS.buildRig(world,px,0,-(++group),{pose:pose,rootAng:r.parts[3].getAngle(),clear:0.01,dir:-r.dir,scale:r.scale,wid:r.wid});
     ['num','name','skin','blood','bl','koT','dead','headCrushed'].forEach(function(f){if(r[f]!=null)n[f]=r[f];});
-    if(I)for(k=0;k<RS.NJ;k++){if(I.gone[k]&&(k%3===0||!I.gone[k-1]))RS.sever(n,k);else if(I.broken[k])RS.breakBone(n,k,true);}
+    if(I)for(k=0;k<RS.NJ;k++){if(I.gone[k]&&(k%3===0||!I.gone[k-1]))RS.sever(n,k);else if(I.broken[k])RS.breakBone(n,k,true,I.open&&I.open[k]?1:0);}
     n.ev=[];rigs[i]=n;if(camFollow===r)camFollow=n;
   }
   function removeRig(r){var i=rigs.indexOf(r);if(i<0)return;if(camFollow===r)camFollow=null;allParts(r).forEach(function(b){world.destroyBody(b);});rigs.splice(i,1);liveBufs.splice(i,1);}
@@ -810,7 +813,7 @@
           if(gore&&e.d>6){p=randPt(b);gL=layerOf(e.k);gush(p.x,p.y,0,0,Math.round((e.d-5)*5),0.8+0.15*e.d,1);splats(r,e.k,1+(e.d/4|0),0.012+0.003*(e.d-6));}
         }else if(e.t==='break'){
           c=r.rc[e.k];sfx('crunch',false);
-          if(gore){p=anchorA(c);var kb=r.bodies.indexOf(c.b);gL=layerOf(kb);gush(p.x,p.y,0,0.5,25,1.8,1);addDecal(r,kb,p,0.035);addDecal(r,r.bodies.indexOf(c.a),p,0.025);}
+          if(gore&&e.d>0.5){p=anchorA(c);var kb=r.bodies.indexOf(c.b);gL=layerOf(kb);gush(p.x,p.y,0,0.5,Math.round(20+30*e.d),1.6+0.6*e.d,1);addDecal(r,kb,p,0.035);addDecal(r,r.bodies.indexOf(c.a),p,0.025);} // open fracture bleeds; a closed one is just the crack
         }else if(e.t==='crush'){
           sfx('crunch',true);sfx('squelch');
           b=e.k===0?r.bodies[0]:r.rc[e.k].b;p=b.getWorldCenter();
@@ -860,11 +863,11 @@
       if(bl>0.05){
         stumps(r,function(c){if(Math.random()<dt*(r.dead?0.6:2.2)*Math.min(1,bl*1.5))ooze(r,r.bodies.indexOf(c.a),anchorA(c));
           if(Math.random()<dt*0.8)ooze(r,r.bodies.indexOf(c.b),c.b.getWorldPoint(c.j.getLocalAnchorB()));});
-        if(r.inj)for(var kk=0;kk<RS.NJ;kk++)if(r.inj.broken[kk]&&!r.inj.gone[kk]&&Math.random()<dt*0.5)ooze(r,r.bodies.indexOf(r.rc[kk].b),anchorA(r.rc[kk]));
+        if(r.inj)for(var kk=0;kk<RS.NJ;kk++)if(r.inj.broken[kk]&&r.inj.open&&r.inj.open[kk]&&!r.inj.gone[kk]&&Math.random()<dt*0.5)ooze(r,r.bodies.indexOf(r.rc[kk].b),anchorA(r.rc[kk]));
         if(r.chunks)r.chunks.forEach(function(ch,ci){if(!ch.gone&&Math.random()<dt*0.4)ooze(r,r.bodies.length+ci,ch.b.getPosition());});
         if(r.hole&&bl>0.02)r.hole.forEach(function(h){var hb=partOf(r,h.k);if(hb&&Math.random()<dt*(r.dead?0.4:1.4))ooze(r,h.k,hb.getWorldPoint(Vec2(h.x,h.y)));});
       }
-      var I=r.inj;if(I)for(var k=0;k<RS.NJ;k++)if(I.broken[k]&&Math.random()<0.04){var q=anchorA(r.rc[k]);gL=layerOf(r.bodies.indexOf(r.rc[k].b));gush(q.x,q.y,0,0,1,0.2,1);} // open fractures drip
+      var I=r.inj;if(I)for(var k=0;k<RS.NJ;k++)if(I.broken[k]&&I.open&&I.open[k]&&Math.random()<0.04){var q=anchorA(r.rc[k]);gL=layerOf(r.bodies.indexOf(r.rc[k].b));gush(q.x,q.y,0,0,1,0.2,1);} // open fractures drip
     });
     // particles: fall, land on the ground (stain + tiny splat sound)
     for(var i=parts.length-1;i>=0;i--){
@@ -915,6 +918,9 @@
     ctx.save();ctx.imageSmoothingEnabled=false;ctx.fillStyle=worldPat(groundPattern(),64);ctx.fillRect(0,gy,W,H-gy+1);
     ctx.fillStyle='#3a3329';ctx.fillRect(0,gy,W,Math.max(2,0.03*cam.z)); // top edge
     ctx.fillStyle='rgba(255,176,32,0.35)';ctx.fillRect(0,gy,W,1); // thin amber line along the floor
+    [-1,1].forEach(function(sd){var wx=toScreen(Vec2(sd*ARENA,0)).x; // the walls: same concrete, amber edge
+      ctx.fillStyle=worldPat(groundPattern(),64);if(sd<0){if(wx>0)ctx.fillRect(0,0,wx,gy);}else if(wx<W)ctx.fillRect(wx,0,W-wx,gy);
+      ctx.fillStyle='#3a3329';var ew=Math.max(2,0.03*cam.z);ctx.fillRect(sd<0?wx-ew:wx,0,ew,gy);ctx.fillStyle='rgba(255,176,32,0.35)';ctx.fillRect(wx,0,1,gy);});
     ctx.fillStyle='#4a0606';
     stains.forEach(function(s){var a=toScreen(Vec2(s.x,0));ctx.globalAlpha=0.92;ctx.beginPath();ctx.ellipse(a.x,a.y+1,Math.max(0.5,s.w*cam.z*0.5),Math.max(0.4,s.h*cam.z),0,0,Math.PI*2);ctx.fill();});
     ctx.restore();
@@ -1097,7 +1103,7 @@
     rigs.forEach(function(r){if(r.koT>0)ko=true;if(r.dead)dead=true;});
     document.getElementById('iKO').checked=ko;document.getElementById('iDead').checked=dead;
   }
-  function setBone(k,on){rigs.forEach(function(r){RS.breakBone(r,k,on);if(k===0&&!on)r.dead=false;});}
+  function setBone(k,on){rigs.forEach(function(r){RS.breakBone(r,k,on,0);if(k===0&&!on)r.dead=false;});}
   for(var bi=0;bi<RS.NJ;bi++)(function(k){document.getElementById('iB'+k).onchange=function(){setBone(k,this.checked);injSync();};})(bi);
   document.getElementById('iKO').onchange=function(){var on=this.checked;rigs.forEach(function(r){r.koT=on?1e9:0;if(!on)r.age=0;});};
   document.getElementById('iDead').onchange=function(){var on=this.checked;rigs.forEach(function(r){r.dead=on;if(!on){RS.breakBone(r,0,false);r.koT=0;r.age=0;r.gu.ph=-1;}});};
@@ -1110,7 +1116,8 @@
       for(var k=0;k<RS.NJ;k++){
         if(!I.broken[k]&&!(I.gone[k]&&(k===3||k===6||k===9||k===12||!I.gone[k-1])))continue;
         var c=r.rc[k],a=toScreen(c.a.getWorldPoint(c.j.getLocalAnchorA()));
-        ctx.globalAlpha=k>=3&&k<9?0.5:1;ctx.beginPath();ctx.arc(a.x,a.y,Math.max(1.5,(I.gone[k]?0.05:0.035)*cam.z),0,Math.PI*2);ctx.fill();
+        var shut=!I.gone[k]&&!(I.open&&I.open[k]);ctx.fillStyle=shut?'#4a2f52':'#e03131'; // closed break: a bruise, not blood
+        ctx.globalAlpha=(k>=3&&k<9?0.5:1)*(shut?0.7:1);ctx.beginPath();ctx.arc(a.x,a.y,Math.max(1.5,(I.gone[k]?0.05:0.035)*cam.z),0,Math.PI*2);ctx.fill();
         if(I.gone[k]){var b=toScreen(c.b.getWorldPoint(c.j.getLocalAnchorB()));ctx.beginPath();ctx.arc(b.x,b.y,Math.max(1.5,0.045*cam.z),0,Math.PI*2);ctx.fill();}
       }
     });
@@ -1124,6 +1131,8 @@
   }
   function frameInner(t){
     var dt=Math.min((t-last)/1000,0.05);last=t;
+    cam.x=Math.max(-ARENA+1,Math.min(ARENA-1,cam.x)); // camera stays in the arena
+    items.forEach(function(g){var q=g.b.getPosition();if(!g.stuck&&(q.y<-0.03||Math.abs(q.x)>ARENA)){g.b.setTransform(Vec2(Math.max(-ARENA+0.3,Math.min(ARENA-0.3,q.x)),0.2),g.b.getAngle());g.b.setLinearVelocity(Vec2(0,0));}}); // anything that got pushed through the floor or a wall pops back out
     var paused=userPaused||training&&pool.mode!=='workers'; // main-thread training: no time left for the live view
     if(!paused){
       if(opt('oSlow'))dt*=0.25;
