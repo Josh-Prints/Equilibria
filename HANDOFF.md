@@ -332,3 +332,8 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - Pushing a stuck knife deeper uses a soft 3 Hz hand, so how far past the handle you push sets the force. Pulling it out is firm (25 Hz).
 - A hard yank (about 20+ m/s finger) now tears limbs off through the existing joint-pull sever check. A violent drag by the chest can fling an arm off too.
 - The hammer can now be swung much faster (it follows the finger), so crushes are easier.
+
+## v0.2.24 — closed vs open fractures, floor/walls
+- `breakBone(rig,k,on,sev)`: sev 0..1. Over 0.5 it's an open fracture (`inj.open[k]=1`): it gushes, leaves a decal, oozes and drips, and bleeds at weight 0.3 (was 0.05 for every break). At 0.5 or under it's closed: a crunch and a dark bruise dot, no blood.
+- Where sev comes from: load breaks use `(instant force/limit - 1)/1.5`; the spine-landing break uses `(impS-9)/6`; a hammer limb blow uses `(sp-2.5f)/3f`; a torso blow `(sp-6f)/3f`; crushes 1; a bullet's bone break 0 (the hole already bleeds). No sev given: random.
+- Arena: `ARENA`=30, walls at x=±30 (static fixtures on `ground`). The floor is now 20 m thick. The mouse-joint target is clamped above the floor and inside the walls. The camera x is clamped to the arena. Free items found under the floor or outside the walls pop back up.
