@@ -696,6 +696,29 @@ var RS=(function(){
       if(Math.random()>(hard?0.5:0.25))addStrand(rig,j,last,C,prevEnd,ncB,C.getMass()*10,{L:0.04,n:3+(Math.random()*2|0),thin:true,minW:2});
     }
   }
+  // BURST (FLAGS.shatter): a crushed head or torso part flies apart into 3-6 lumps (chunks, like a shattered limb).
+  //  The part itself stays (it holds the rest of the body together) but is squashed down to what's left: a head to a
+  //  stump of jaw and neck, a chest/belly/pelvis caved in to about half its width.
+  function burst(rig,k,hard){
+    var B=rig.bodies[k];if(!B||rig['burst'+k])return;rig['burst'+k]=1;
+    var f=B.getFixtureList();if(!f)return;var vs=f.getShape().m_vertices,hx=0,hy=0,i;
+    if(vs)for(i=0;i<vs.length;i++){hx=Math.max(hx,Math.abs(vs[i].x));hy=Math.max(hy,Math.abs(vs[i].y));}else{hx=hy=f.getShape().m_radius||0.08;}
+    var w=B.getWorld(),den=f.getDensity(),fr=f.getFriction(),g=f.getFilterGroupIndex(),ud=B.getUserData(),ang=B.getAngle(),av=B.getAngularVelocity();
+    var n=3+(Math.random()*(hard?4:2)|0),kick=hard?3.5:2;
+    for(i=0;i<n;i++){
+      var lx=(Math.random()*2-1)*hx*0.6,ly=(Math.random()*2-1)*hy*0.6,sx=hx*(0.25+0.2*Math.random()),sy=hy*(0.2+0.2*Math.random());
+      if(k===0)ly=Math.abs(ly)*0.8+hy*0.1; // a head bursts from the top: the jaw stays
+      var wp=B.getWorldPoint(Vec2(lx,ly)),body=w.createBody({type:'dynamic',position:wp,angle:ang+(Math.random()-0.5)*0.8});
+      body.createFixture(Box(sx,sy),{density:den,friction:fr,restitution:0.05,filterGroupIndex:g});
+      var v=B.getLinearVelocityFromWorldPoint(wp),dx=wp.x-B.getPosition().x,dy=wp.y-B.getPosition().y,dl=Math.hypot(dx,dy)||1;
+      body.setLinearVelocity(Vec2(v.x+dx/dl*kick+(Math.random()-0.5)*kick,v.y+Math.abs(dy/dl)*kick*0.6+Math.random()*kick));body.setAngularVelocity(av+(Math.random()-0.5)*14);
+      body.setUserData(ud);(rig.chunks||(rig.chunks=[])).push({b:body,k:k});
+      if(Math.random()<(hard?0.35:0.6))addStrand(rig,Math.max(0,k-1),B,body,Vec2(lx*0.5,ly*0.5),Vec2(0,0),body.getMass()*10,{L:0.03,n:2+(Math.random()*3|0),thin:true,minW:1,max:0.12+0.12*Math.random()});
+    }
+    B.destroyFixture(f); // what's left of it
+    if(k===0)B.createFixture(Box(hx*0.85,hy*0.4,Vec2(0,-hy*0.55),0),{density:den,friction:fr,restitution:0,filterGroupIndex:g});
+    else B.createFixture(Box(hx*(hx<hy?0.5:0.95),hy*(hx<hy?0.95:0.5),Vec2(0,0),0),{density:den,friction:fr,restitution:0,filterGroupIndex:g});
+  }
   // events for the page (blood, sounds): {t:'break'|'sever'|'crush'|'hit', k: joint (or body for hits), d: strength}
   function ev(rig,t,k,d){
     (rig.ev||(rig.ev=[])).push({t:t,k:k,d:d||0});if(rig.ev.length>64)rig.ev.shift();
@@ -735,8 +758,8 @@ var RS=(function(){
         var real=FLAGS.realism===2||FLAGS.realism==null;
         var lim=k===0?(real?FLAGS.crushImp:21*rmul()*FLAGS.crushLimb):k<4?(real?2.2*FLAGS.crushImp:46*rmul()*FLAGS.crushLimb):(real?CRUSHL:CRUSHO)[(k-4)%6]*FLAGS.crushLimb*(real?1:rmul());
         var d=real?rig.impV[k]:rig.impB[k];if(!(d>lim))continue;
-        if(k===0){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crush',0,d);}continue;}
-        if(k<4){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crushT',k,d);}continue;} // torso: it takes a huge slam (about twice the skull's) but it caves in
+        if(k===0){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crush',0,d);}if(FLAGS.shatter&&FLAGS.death!==0)burst(rig,0,d>lim*1.3);continue;}
+        if(k<4){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crushT',k,d);}if(FLAGS.shatter&&FLAGS.death!==0)burst(rig,k,d>lim*1.3);continue;} // torso: it takes a huge slam (about twice the skull's) but it caves in
         var j=k-1;if(I.gone[j])continue;
         if(FLAGS.shatter&&FLAGS.sever){ev(rig,'crush',j,d);shatter(rig,j,d>lim*FLAGS.ripImp);}
         else if(FLAGS.sever&&d>lim*FLAGS.ripImp){ev(rig,'crush',j,d);sever(rig,j);}
@@ -1114,7 +1137,7 @@ var RS=(function(){
     return {mean:sum/all.length,best:best};
   }
 
-  return {JNAMES:JNAMES,shot:shot,brainHit:brainHit,breakBone:breakBone,sever:sever,shatter:shatter,hurt:hurt,DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},GU:GU,FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
+  return {JNAMES:JNAMES,shot:shot,brainHit:brainHit,breakBone:breakBone,sever:sever,shatter:shatter,burst:burst,hurt:hurt,DCLS:DCLS,DIN:DIN,detFeat:detFeat,detForward:detForward,setDet:function(w){DET=w;},hasDet:function(){return !!DET;},GU:GU,FLAGS:FLAGS,buildRig:buildRig,pdRig:pdRig,act:act,sense:sense,newBuf:newBuf,forward:forward,initParams:initParams,rngMake:rngMake,gauss:gauss,
     esNoise:esNoise,esStep:esStep,migrate:migrate,runEpisode:runEpisode,evalCandidate:evalCandidate,sampleScenario:sampleScenario,fk:fk,
     NP:NP,NI:NI,NO:NO,NJ:NJ,DT:DT,SUB:SUB,POLICY_HZ:POLICY_HZ,VEL_IT:VEL_IT,POS_IT:POS_IT,JT:JT,ORDER:ORDER,CASES:CASES,wrap:wrap};
 })();
