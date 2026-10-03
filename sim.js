@@ -733,10 +733,10 @@ var RS=(function(){
     if(FLAGS.crush&&I.t>0.2&&rig.impB){
       for(k=0;k<ps.length;k++){
         var real=FLAGS.realism===2||FLAGS.realism==null;
-        var lim=k===0?(real?FLAGS.crushImp:21*rmul()*FLAGS.crushLimb):k<4?1e9:(real?CRUSHL:CRUSHO)[(k-4)%6]*FLAGS.crushLimb*(real?1:rmul());
+        var lim=k===0?(real?FLAGS.crushImp:21*rmul()*FLAGS.crushLimb):k<4?(real?2.2*FLAGS.crushImp:46*rmul()*FLAGS.crushLimb):(real?CRUSHL:CRUSHO)[(k-4)%6]*FLAGS.crushLimb*(real?1:rmul());
         var d=real?rig.impV[k]:rig.impB[k];if(!(d>lim))continue;
         if(k===0){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crush',0,d);}continue;}
-        if(k<4)continue;
+        if(k<4){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crushT',k,d);}continue;} // torso: it takes a huge slam (about twice the skull's) but it caves in
         var j=k-1;if(I.gone[j])continue;
         if(FLAGS.shatter&&FLAGS.sever){ev(rig,'crush',j,d);shatter(rig,j,d>lim*FLAGS.ripImp);}
         else if(FLAGS.sever&&d>lim*FLAGS.ripImp){ev(rig,'crush',j,d);sever(rig,j);}

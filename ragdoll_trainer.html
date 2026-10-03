@@ -203,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.2.25</div>
+  <div class="ver">beta v0.2.26</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -224,7 +224,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.2.25</div>
+  <div class="ver">beta v0.2.26</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -965,10 +965,10 @@ var RS=(function(){
     if(FLAGS.crush&&I.t>0.2&&rig.impB){
       for(k=0;k<ps.length;k++){
         var real=FLAGS.realism===2||FLAGS.realism==null;
-        var lim=k===0?(real?FLAGS.crushImp:21*rmul()*FLAGS.crushLimb):k<4?1e9:(real?CRUSHL:CRUSHO)[(k-4)%6]*FLAGS.crushLimb*(real?1:rmul());
+        var lim=k===0?(real?FLAGS.crushImp:21*rmul()*FLAGS.crushLimb):k<4?(real?2.2*FLAGS.crushImp:46*rmul()*FLAGS.crushLimb):(real?CRUSHL:CRUSHO)[(k-4)%6]*FLAGS.crushLimb*(real?1:rmul());
         var d=real?rig.impV[k]:rig.impB[k];if(!(d>lim))continue;
         if(k===0){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crush',0,d);}continue;}
-        if(k<4)continue;
+        if(k<4){if(!rig.dead&&FLAGS.death!==0){rig.dead=true;ev(rig,'crushT',k,d);}continue;} // torso: it takes a huge slam (about twice the skull's) but it caves in
         var j=k-1;if(I.gone[j])continue;
         if(FLAGS.shatter&&FLAGS.sever){ev(rig,'crush',j,d);shatter(rig,j,d>lim*FLAGS.ripImp);}
         else if(FLAGS.sever&&d>lim*FLAGS.ripImp){ev(rig,'crush',j,d);sever(rig,j);}
@@ -1605,8 +1605,9 @@ var RS=(function(){
     if(S.k===0&&!S.brain&&rigs.indexOf(R2)>=0)RS.brainHit(R2,0.08+0.3*fq,false); // shallow into the skull: damage, not death
     if(P&&rigs.indexOf(R2)>=0){ // the wound opens now it's out, worse the deeper it went
       if(P.heart&&fq<0.45){P.heart=null;P.hw=P.hwNH;}if(P.hw)P.hw*=0.3+1.2*fq; // a shallow stab doesn't reach the heart
+      if(S.seep)R2.holes=Math.max(0,(R2.holes||0)-S.seep); // swap the seep for the full bleed
       if(P.hw&&RS.FLAGS.bleed)R2.holes=(R2.holes||0)+P.hw;
-      if(P.hole){(R2.hole||(R2.hole=[])).push(P.hole);if(opt('oGore')&&P.hole.k<R2.bodies.length+(R2.chunks?R2.chunks.length:0)){var wp2=partOf(R2,P.hole.k).getWorldPoint(Vec2(P.hole.x,P.hole.y));addDecal(R2,P.hole.k,wp2,0.03);splats(R2,P.hole.k,2,0.02);}}
+      if(P.hole){if(!P.holeOn)(R2.hole||(R2.hole=[])).push(P.hole);if(opt('oGore')&&P.hole.k<R2.bodies.length+(R2.chunks?R2.chunks.length:0)){var wp2=partOf(R2,P.hole.k).getWorldPoint(Vec2(P.hole.x,P.hole.y));addDecal(R2,P.hole.k,wp2,0.03);splats(R2,P.hole.k,2,0.02);}}
       if(P.heart&&!R2.heart)R2.heart=P.heart;
     }
     if(drag&&drag.body===g.b)drag.mass=g.b.getMass(); // was grabbed while welded in, so the pull was sized for the whole body: knife alone now or it rockets off
@@ -1631,6 +1632,8 @@ var RS=(function(){
       var tr=S.j.getJointTranslation(),dp=S.d0+tr,held=drag&&drag.body===gi2.b; // dp: how deep the tip is now
       if(dp>S.dmax){if(rigs.indexOf(S.r)>=0)S.r.painS=Math.min(2,(S.r.painS||0)+3*(dp-S.dmax));S.dmax=dp;}S.dep=dp; // deeper hurts
       if(S.k===0&&dp>KBRAIN)brainIn(S);
+      if(rigs.indexOf(S.r)>=0&&S.pend&&S.pend.hw&&RS.FLAGS.bleed){var fq2=Math.min(1,S.dmax/KBL),hw2=(S.pend.heart&&fq2<0.45?S.pend.hwNH:S.pend.hw)*(0.3+1.2*fq2)*(S.k>=1&&S.k<=3?0.45:0.3),dh=hw2-(S.seep||0);if(Math.abs(dh)>1e-4){S.r.holes=Math.max(0,(S.r.holes||0)+dh);S.seep=hw2;}} // still in: it seeps (30% of what it'll bleed once out), so a deep chest stab still kills, slower
+      if(rigs.indexOf(S.r)>=0&&S.pend&&S.pend.hole&&!S.pend.holeOn){S.pend.holeOn=1;(S.r.hole||(S.r.hole=[])).push(S.pend.hole);}
       S.j.setMaxMotorForce(held?3+10*Math.pow(dp/KBL,2):KGRIP); // pushing it in gets harder the deeper it goes; let go and the flesh holds it
       if(dp<0.004&&performance.now()-S.t0>150){unstick(gi2,true);continue;} // pulled back until the tip's out
       if(held&&performance.now()-S.t0>350){var wq=gi2.b.getWorldPoint(drag.local),bq=gi2.b.getWorldVector(Vec2(-1,0)); // a hard yank (finger well back along the handle) rips it out even if it drags them along
@@ -1657,6 +1660,7 @@ var RS=(function(){
           return;
         }
         // torso: knocked down; hard enough breaks ribs/spine and bleeds inside (stays down)
+        if(sp>11*f){r.ev.push({t:'crushT',k:k,d:sp});if(RS.FLAGS.death!==0)r.dead=true;if(RS.FLAGS.bleed)r.holes=(r.holes||0)+6;return;} // a monster blow caves the chest / stoves in the belly: dead
         if(sp>3.5*f&&!r.dead){var lp=r.bodies[k].getLocalPoint(h.p),bad=sp>6*f;
           if(bad){if(k<3)RS.breakBone(r,k,true,(sp-6*f)/(3*f));if(RS.FLAGS.bleed)r.holes=(r.holes||0)+1.5;sfx('crunch',true);}
           RS.shot(r,k,lp.x,lp.y,h.d.x,bad);}
@@ -1813,7 +1817,7 @@ var RS=(function(){
     if(!drag)return;
     var b=drag.body;b.setAwake(true);
     var ib=itemOf(b),m=Math.max(drag.mass,b.getMass());
-    if(!+$('rGrab').value){ // Smooth (default): the original soft spring pull, it trails the finger a bit
+    if(!+$('rGrab').value&&!(ib&&ib.type==='knife')){ // Smooth (default; the knife always uses Sticky): the original soft spring pull, it trails the finger a bit
       if(mj){try{world.destroyJoint(mj);}catch(e){}mj=null;mjB=null;}
       var wp0=b.getWorldPoint(drag.local),v0=b.getLinearVelocityFromWorldPoint(wp0),t0=drag.target,tx=Math.max(-ARENA+0.02,Math.min(ARENA-0.02,t0.x)),ty=Math.max(0.02,t0.y); // still can't be pulled through the floor or a wall
       var ax=120*(tx-wp0.x)-22*v0.x,ay=120*(ty-wp0.y)-22*v0.y,cp=ib?(ib.stuck?40:300):80,mg=Math.sqrt(ax*ax+ay*ay);if(mg>cp){ax*=cp/mg;ay*=cp/mg;}
@@ -2183,6 +2187,9 @@ var RS=(function(){
           b=e.k===0?r.bodies[0]:r.rc[e.k].b;p=b.getWorldCenter();
           if(gore){var kc=r.bodies.indexOf(b);gL=layerOf(kc);gush(p.x,p.y,0,1,140,2.4+0.12*e.d,1);gush(p.x,p.y,0,1.5,24,2.8,1,true);r.bl[kc]=1;splats(r,kc,10,0.03);}
           if(e.k===0)r.headCrushed=true;
+        }else if(e.t==='crushT'){ // torso crushed (chest caved in, belly burst)
+          sfx('crunch',true);sfx('squelch');b=r.bodies[e.k];p=b.getWorldCenter();
+          if(gore){gL=layerOf(e.k);gush(p.x,p.y,0,1,180,2.6+0.1*e.d,1);gush(p.x,p.y,0,1.5,30,2.8,1,true);r.bl[e.k]=1;splats(r,e.k,14,0.035);}
         }else if(e.t==='snap'){
           sfx('squelch');
           if(gore){p=anchorA(r.rc[e.k]);gL=layerOf(r.bodies.indexOf(r.rc[e.k].b));gush(p.x,p.y,0,0.5,30,1.6,1);}

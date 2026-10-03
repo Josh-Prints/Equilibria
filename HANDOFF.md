@@ -345,3 +345,8 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
   - Head KO `koImp` went from 5.5 to 7.5, and lasts `3+2x` s (was `5+3x`).
   - A hammer to the head knocks them out from 4f (was 3f).
   - Blood loss KO is now under 35% (was 45%).
+
+## v0.2.26 — stuck knife kills, torso crush, knife always sticky
+- While a knife is stuck, the rig gets a seep (`S.seep`, added to `r.holes`): the depth-scaled bleed weight times 0.45 in the torso, or 0.3 elsewhere. The wound's ooze hole starts dripping straight away. When the knife is pulled out, the seep is swapped for the full bleed. A deep chest stab left in kills in about 40 s (blood under 20%).
+- Torso crush: a hammer blow to the torso over 11f gives a `crushT` event, death, and +6 bleed. Falls (`crushBleed`) can crush the torso at 2.2×`crushImp` (realistic) or 46 (default). `goreStep` draws `crushT` as a big gush.
+- The knife always uses the Sticky grab (mouse joint), whatever the Grab setting says.
