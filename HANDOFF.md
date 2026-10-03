@@ -350,3 +350,6 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 - While a knife is stuck, the rig gets a seep (`S.seep`, added to `r.holes`): the depth-scaled bleed weight times 0.45 in the torso, or 0.3 elsewhere. The wound's ooze hole starts dripping straight away. When the knife is pulled out, the seep is swapped for the full bleed. A deep chest stab left in kills in about 40 s (blood under 20%).
 - Torso crush: a hammer blow to the torso over 11f gives a `crushT` event, death, and +6 bleed. Falls (`crushBleed`) can crush the torso at 2.2×`crushImp` (realistic) or 46 (default). `goreStep` draws `crushT` as a big gush.
 - The knife always uses the Sticky grab (mouse joint), whatever the Grab setting says.
+
+## v0.3.0
+- Josh bumped the minor version. No code changes since v0.2.26.
