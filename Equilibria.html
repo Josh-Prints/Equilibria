@@ -203,7 +203,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.3.1 hotfix 1</div>
+  <div class="ver">beta v0.3.1 hotfix 2</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -225,7 +225,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.3.1 hotfix 1</div>
+  <div class="ver">beta v0.3.1 hotfix 2</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -1930,9 +1930,12 @@ var RS=(function(){
   var gyro={on:false,lis:false,gx:0,gy:-10,sgn:0};
   function gyroMotion(e){var a=e.accelerationIncludingGravity;if(!a||a.x==null)return;gyro.got=1;
     var x=a.x,y=a.y,an=((screen.orientation&&screen.orientation.angle)||window.orientation||0)*Math.PI/180,c=Math.cos(an),s=Math.sin(an),sx=x*c+y*s,sy=-x*s+y*c; // into screen axes
-    if(!gyro.sgn)gyro.sgn=sy>0?-1:1; // browsers disagree on the sign: it's held roughly upright when switched on, so down is whichever way y points
-    var k=10/9.81,tx=gyro.sgn*sx*k,ty=gyro.sgn*sy*k,m=Math.hypot(tx,ty);if(m>40){tx*=40/m;ty*=40/m;}
-    gyro.gx+=(tx-gyro.gx)*0.3;gyro.gy+=(ty-gyro.gy)*0.3;}
+    if(!gyro.sgn){if(Math.hypot(sx,sy)<3)return;gyro.sgn=sy>0?-1:1;} // browsers disagree on the sign: it's held roughly upright when switched on, so down is whichever way y points
+    var tx=gyro.sgn*sx,ty=gyro.sgn*sy,m=Math.hypot(tx,ty);
+    if(m>2){var k=Math.max(10,Math.min(40,m*10/9.81))/m;tx*=k;ty*=k;} // the direction from the tilt; at least normal strength (lying flat keeps the last direction), shakes push harder
+    else{tx=gyro.gx;ty=gyro.gy;}
+    gyro.gx+=(tx-gyro.gx)*0.3;gyro.gy+=(ty-gyro.gy)*0.3;
+    var now=performance.now();if(!gyro.tn||now-gyro.tn>250){gyro.tn=now;gyroNote('Gyro working: down is '+Math.round(Math.atan2(gyro.gx,-gyro.gy)*180/Math.PI)+'\u00b0 off the screen\'s bottom. Tilt the phone and things slide or fall that way.');}}
   function gyroNote(t){var d=document.getElementById('gyDesc');if(d&&gyro.on)d.textContent=t;}
   function gyroOn(on){
     gyro.on=on;if(!on){gyro.sgn=0;gyro.gx=0;gyro.gy=-10;return;}
