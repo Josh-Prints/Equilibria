@@ -199,8 +199,8 @@
     world=new planck.World({gravity:Vec2(0,-10)});world.on('begin-contact',meleeContact);
     drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;camFollow=null;items=[];fx=[];trig=null;
     ground=world.createBody();ground.createFixture(Box(ARENA+40,20,Vec2(0,-20),0),{friction:0.9}); // floor (20 m thick so nothing tunnels through it)
-    ground.createFixture(Box(20,ROOF+40,Vec2(-ARENA-20,ROOF/2),0),{friction:0.6});ground.createFixture(Box(20,ROOF+40,Vec2(ARENA+20,ROOF/2),0),{friction:0.6}); // walls
-    ground.createFixture(Box(ARENA+40,20,Vec2(0,ROOF+20),0),{friction:0.6}); // roof
+    ground.createFixture(Box(20,ROOF+40,Vec2(-ARENA-20,ROOF/2),0),{friction:0.9});ground.createFixture(Box(20,ROOF+40,Vec2(ARENA+20,ROOF/2),0),{friction:0.9}); // walls (as grippy as the floor: with the gyro they can be stood on)
+    ground.createFixture(Box(ARENA+40,20,Vec2(0,ROOF+20),0),{friction:0.9}); // roof
     spawn('stand');
   }
   var liveBufs=[];
@@ -745,7 +745,16 @@
   };
   function sfx(n,a){if(AC&&opt('oSound')&&AC.state==='running')SFX[n](a);}
 
-  var parts=[],stains=[],MAXP=Infinity,gL=2,STICK=0.35;
+  var parts=[],stains=[],MAXP=Infinity,gL=2,STICK=0.35,GX=0,GY=-10,GDX=0,GDY=-1; // GX,GY: world gravity now (the gyro turns it), GD: its direction
+  // the controller works in the gravity frame (sim.js frameBody): which way is down, and how high the surface under each person is
+  function frameRigs(){
+    var flat=GX===0&&GY===-10;
+    rigs.forEach(function(r){var F=r.F;if(!F)return;
+      if(flat){F.a=0;F.c=1;F.s=0;F.h=0;return;}
+      var a=Math.atan2(GX,-GY),c=Math.cos(a),sn=Math.sin(a),b=r.bodies[3]||r.bodies[1],p=b.getPosition(),hit=null;
+      world.rayCast(p,Vec2(p.x+GDX*80,p.y+GDY*80),function(f,pt,n,fr){if(!f.getBody().isStatic())return -1;hit=Vec2(pt.x,pt.y);return fr;});
+      F.a=a;F.c=c;F.s=sn;if(hit)F.h=hit.y*c-hit.x*sn;});
+  }
   // draw layers, bottom to top: far arm, far leg, head and torso, near leg, near arm (blood, tears and strands go on the layer they came from)
   // draw slots, bottom to top: 0 far arm, 1 far leg, 2 head and torso, 3 near leg, 4 near arm
   function layerOf(k){if(k<4)return 2;var arm=(k-4)%6<3;return k<10?(arm?0:1):(arm?4:3);}
@@ -787,10 +796,10 @@
     for(var k=0;k<n;k++){
       if(k>=nb&&r.chunks[k-nb].gone)continue;var b=partOf(r,k),f=b.getFixtureList();if(!f)continue;
       var sh=f.getShape(),vs=sh.m_vertices;if(!vs)continue;
-      var c=b.getWorldCenter();if(c.y>0.4)continue; // nowhere near the floor
+      var c=b.getWorldCenter();if(c.y>0.4)continue; // nowhere near the floor (pools on the floor only)
       for(var i=0;i<vs.length;i++){
         var w=b.getWorldPoint(vs[i]);if(w.y>0.03)continue;
-        for(var j=stains.length-1;j>=0;j--){var st=stains[j];if(Math.abs(w.x-st.x)>st.w*0.5)continue;
+        for(var j=stains.length-1;j>=0;j--){var st=stains[j];if(st.sd||Math.abs(w.x-st.x)>st.w*0.5)continue;
           if(Math.random()<dt*Math.min(3,0.6+st.w*4)){
             var lp=b.getLocalPoint(Vec2(w.x+(c.x-w.x)*0.15*Math.random(),w.y+(c.y-w.y)*0.25*Math.random()));
             var A=r.dec&&r.dec[k],sz=0.014+Math.random()*0.016;
@@ -822,9 +831,12 @@
     return null;
   }
   function stick(q,h){var lp=h.b.getLocalPoint(Vec2(q.x,q.y));q.on=h.b;q.fx=h.f;q.rig=h.r;q.k=h.k;q.lx=lp.x;q.ly=lp.y;q.tl=null;q.L=layerK(h.r,h.k);if(q.vol==null)q.vol=2+(Math.random()*6|0);q.ph=Math.random()*6;}
-  function stain(x,r){
-    for(var i=stains.length-1;i>=Math.max(0,stains.length-40);i--){var s=stains[i];if(Math.abs(s.x-x)<s.w*0.6){s.w=Math.min(2,s.w+r*0.9);s.h=Math.min(0.05,s.h+r*0.12);return;}}
-    stains.push({x:x,w:r*5,h:0.01+r*0.4});
+  // stains: pools on the floor (sd 0) and splats on the right wall (1), left wall (2) and roof (3); x runs along the surface
+  var SDN=[[0,1],[-1,0],[1,0],[0,-1]]; // inward normal of each surface
+  function stain(x,r,sd){
+    sd=sd||0;
+    for(var i=stains.length-1;i>=Math.max(0,stains.length-40);i--){var s=stains[i];if((s.sd||0)===sd&&Math.abs(s.x-x)<s.w*0.6){s.w=Math.min(2,s.w+r*0.9);s.h=Math.min(0.05,s.h+r*0.12);return;}}
+    var n={x:x,w:r*5,h:0.01+r*0.4};if(sd)n.sd=sd;stains.push(n);
   }
   function bodyOf(r,j){return r.rc[j].b;}
   function anchorA(c){return c.a.getWorldPoint(c.j.getLocalAnchorA());}
@@ -916,7 +928,8 @@
       var q=parts[i];
       if(q.on){ // running over the skin: trickles downhill across the part (leaving a smear), drips off the edge
         var b=q.on,ha=b.getAngle(),c=Math.cos(ha),sn=Math.sin(ha),spd=q.t?0.12:(q.spd||(q.spd=0.07+Math.random()*0.12)),wob=0.35*Math.sin(q.ph+=dt*5);
-        q.lx+=(-sn+wob*c)*spd*dt;q.ly+=(-c-wob*sn)*spd*dt;
+        var ddx=GDX*c+GDY*sn,ddy=GDY*c-GDX*sn; // 'down' (the way gravity pulls, gyro included) in the part's own frame
+        q.lx+=(ddx-wob*ddy)*spd*dt;q.ly+=(ddy+wob*ddx)*spd*dt;
         var tl=q.tl||(q.tl=[q.lx,q.ly]);if(Math.hypot(tl[tl.length-2]-q.lx,tl[tl.length-1]-q.ly)>0.008){tl.push(q.lx,q.ly);if(tl.length>16)tl.splice(0,2);}
         var wp=b.getWorldPoint(Vec2(q.lx,q.ly));q.x=wp.x;q.y=wp.y;q.life-=q.t?dt:dt*0.4;
         if(!q.t){q.tr=(q.tr||0)+spd*dt;if(q.tr>0.018){q.tr=0;addDecalL(q.rig,q.k,q.lx,q.ly,q.r*0.8);q.vol--;}}
@@ -926,12 +939,15 @@
         if(!q.t)addTrickle(q.rig,q.k,q.tl,q.r*0.7);
         var hv=b.getLinearVelocityFromWorldPoint(wp);q.vx=hv.x;q.vy=hv.y;q.skip=b;q.skT=0.12;q.on=null;
       }
-      q.vy-=10*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt;
+      q.vx+=GX*dt;q.vy+=GY*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt;
       if(q.ck&&!q.g){if(q.skT>0)q.skT-=dt;var h=hitBody(q);if(h){stick(q,h);continue;}}
-      if(q.y<=q.r*0.5){
-        if(q.g){q.y=q.r*0.5;q.vy*=-0.25;q.vx*=0.5;if(Math.abs(q.vy)<0.2){stain(q.x,q.r*0.8);q.life=Math.min(q.life,0);}}
+      var rh=q.r*0.5,sd=q.y<=rh?0:q.x>=ARENA-rh?1:q.x<=-ARENA+rh?2:q.y>=ROOF-rh?3:-1; // landed on the floor, a wall or the roof
+      if(sd>=0){
+        var nx=SDN[sd][0],ny=SDN[sd][1],vn=-(q.vx*nx+q.vy*ny),along=sd===1||sd===2?q.y:q.x,gin=-(GX*nx+GY*ny); // vn: speed into the surface, gin: gravity into it
+        if(q.g){if(sd===0)q.y=rh;else if(sd===1)q.x=ARENA-rh;else if(sd===2)q.x=-ARENA+rh;else q.y=ROOF-rh;
+          var tx=q.vx+vn*nx,ty=q.vy+vn*ny;q.vx=tx*0.5+0.25*vn*nx;q.vy=ty*0.5+0.25*vn*ny;if(Math.abs(0.25*vn)<0.2&&gin>2){stain(along,q.r*0.8,sd);q.life=Math.min(q.life,0);}} // bounce a little; settles where gravity holds it
         else if(q.t)q.life=0;
-        else{stain(q.x,q.r);if(q.r>0.012)sfx('splat',Math.min(1,-q.vy/5));q.life=0;}
+        else{stain(along,q.r,sd);if(q.r>0.012)sfx('splat',Math.min(1,vn/5));q.life=0;}
       }
       if(q.life<=0)parts.splice(i,1);
     }
@@ -963,7 +979,8 @@
     ctx.fillStyle='#3a3329';ctx.fillRect(c.x,d.y,d.x-c.x,ew);ctx.fillRect(c.x,c.y-ew,d.x-c.x,ew);ctx.fillRect(c.x-ew,c.y,ew,d.y-c.y);ctx.fillRect(d.x,c.y,ew,d.y-c.y); // inner edges
     ctx.strokeStyle='rgba(255,176,32,0.35)';ctx.lineWidth=1;ctx.strokeRect(c.x,c.y,d.x-c.x,d.y-c.y); // thin amber line round the inside
     ctx.fillStyle='#4a0606';
-    stains.forEach(function(s){var a=toScreen(Vec2(s.x,0));ctx.globalAlpha=0.92;ctx.beginPath();ctx.ellipse(a.x,a.y+1,Math.max(0.5,s.w*cam.z*0.5),Math.max(0.4,s.h*cam.z),0,0,Math.PI*2);ctx.fill();});
+    stains.forEach(function(s){var sd=s.sd||0,a=toScreen(sd===0?Vec2(s.x,0):sd===1?Vec2(ARENA,s.x):sd===2?Vec2(-ARENA,s.x):Vec2(s.x,ROOF)),ox=sd===1?1:sd===2?-1:0,oy=sd===0?1:sd===3?-1:0;
+      ctx.globalAlpha=0.92;ctx.beginPath();ctx.ellipse(a.x+ox,a.y+oy,Math.max(0.5,s.w*cam.z*0.5),Math.max(0.4,s.h*cam.z),sd===1||sd===2?Math.PI/2:0,0,Math.PI*2);ctx.fill();});
     ctx.restore();
   }
   function mix(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
@@ -1172,7 +1189,8 @@
   }
   function frameInner(t){
     var dt=Math.min((t-last)/1000,0.05);last=t;
-    if(world){var gw=gyro.on&&gyro.lis?Vec2(gyro.gx,gyro.gy):Vec2(0,-10),g0=world.getGravity();if(Math.abs(g0.x-gw.x)+Math.abs(g0.y-gw.y)>1e-3){world.setGravity(gw);world.getBodyList()&&rigs.forEach(function(r){r.bodies.forEach(function(b){b.setAwake(true);});});items.forEach(function(g){g.b.setAwake(true);});}}
+    if(world){var gw=gyro.on&&gyro.lis?Vec2(gyro.gx,gyro.gy):Vec2(0,-10),g0=world.getGravity();if(Math.abs(g0.x-gw.x)+Math.abs(g0.y-gw.y)>1e-3){world.setGravity(gw);world.getBodyList()&&rigs.forEach(function(r){r.bodies.forEach(function(b){b.setAwake(true);});});items.forEach(function(g){g.b.setAwake(true);});}
+      var gn2=world.getGravity(),gl=Math.hypot(gn2.x,gn2.y)||1;GX=gn2.x;GY=gn2.y;GDX=GX/gl;GDY=GY/gl;}
     cam.x=Math.max(-ARENA+1,Math.min(ARENA-1,cam.x));cam.y=Math.max(-1,Math.min(ROOF+1,cam.y)); // camera stays in the arena
     items.forEach(function(g){var q=g.b.getPosition();if(!g.stuck&&(q.y<-0.03||q.y>ROOF||Math.abs(q.x)>ARENA)){g.b.setTransform(Vec2(Math.max(-ARENA+0.3,Math.min(ARENA-0.3,q.x)),0.2),g.b.getAngle());g.b.setLinearVelocity(Vec2(0,0));}}); // anything that got pushed through the floor or a wall pops back out
     var paused=userPaused||training&&pool.mode!=='workers'; // main-thread training: no time left for the live view
@@ -1184,6 +1202,7 @@
       RS.FLAGS.step=opt('oStep')?1:0;RS.FLAGS.bal2=opt('oBal2')?1:0;RS.FLAGS.nn=opt('oNN')?1:0;RS.FLAGS.getup=opt('oNN')&&opt('oGetup')?1:0;RS.FLAGS.cower=opt('oCower')?1:0;RS.FLAGS.die=opt('oDie')?1:0;RS.FLAGS.protect=opt('oProtect')?1:0;RS.FLAGS.inj=opt('oInj')?1:0;var gv=goreV();RS.FLAGS.sever=opt('oSever')&&gv>=4?1:0;RS.FLAGS.shatter=gv>=7?1:0;RS.FLAGS.crush=1;RS.FLAGS.bleed=gv>0?1:0;RS.FLAGS.bleedMul=gv/10;RS.FLAGS.death=gv>0?1:0;if(!gv)RS.FLAGS.die=0;
       RS.FLAGS.realism=+$('rReal').value;RS.FLAGS.crushLimb=+$('rCrush').value/7;RS.FLAGS.crushImp=14*RS.FLAGS.crushLimb; // settings: 7 (default) = real-world speeds
       while(acc>=DT){
+        if((use||reflex)&&stepCount%SUB===0)frameRigs();
         if((use||reflex)&&stepCount%SUB===0)for(i=0;i<rigs.length;i++)RS.act(rigs[i],use?ES.theta:ZERO_TH,liveBufs[i],liveRng,{delay:1,noise:0.005,reflex:reflex}); // reflexes run even when the policy is off (untrained = zero weights)
         if(pd)for(i=0;i<rigs.length;i++)RS.pdRig(rigs[i]);
         applyDrag();world.step(DT,RS.VEL_IT,RS.POS_IT);meleeStep();acc-=DT;stepCount++;

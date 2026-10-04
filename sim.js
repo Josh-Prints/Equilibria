@@ -108,8 +108,9 @@ var RS=(function(){
       GAIN=pend.map(function(p){var kp=p.kp*p.f;return {kp:kp,kd:p.kd*p.f,max:kp*TMAX};});
     }
     if(!GAIN){var sw=new planck.World({gravity:Vec2(0,-10)});buildRig(sw,0,0,-1,null,true);}
-    var real=bodies,rjoints=joints;
-    if(M<0){bodies=real.map(mirrorBody);joints=rjoints.map(mirrorJoint);} // the controller sees a +x-facing rig; the mirror flips everything it reads and writes
+    var real=bodies,rjoints=joints,F={a:0,c:1,s:0,h:0},gb=real.map(function(b){return frameBody(b,F);}),gj=rjoints.map(function(j){return frameJoint(j,F);});
+    bodies=gb;joints=gj;
+    if(M<0){bodies=gb.map(mirrorBody);joints=gj.map(mirrorJoint);} // the controller sees a +x-facing rig; the mirror flips everything it reads and writes
     var rc=JT.map(function(jt,k){return {j:rjoints[k],a:real[IDX[T[jt.child].p]],b:real[IDX[jt.child]]};});
     var ctrls=JT.map(function(jt,k){
       return {j:joints[k],a:bodies[IDX[T[jt.child].p]],b:bodies[IDX[jt.child]],g:jt.g,kp:GAIN[k].kp*gs,kd:GAIN[k].kd*gs,max:GAIN[k].max*gs,target:0,t:0};
@@ -117,16 +118,44 @@ var RS=(function(){
     var feet=[bodies[IDX.ftf],bodies[IDX.ftn]];
     var soft=FLAGS.soft&&Math.abs(ra)<0.3&&(o.h||0)<0.05,tgt0=new Float64Array(NJ); // soft start (only when spawned upright on the feet): PD targets begin at the spawn pose
     if(soft)for(i=0;i<NJ;i++)tgt0[i]=pose[i];
-    return {parts:bodies,bodies:real,rc:rc,dir:M,scale:S,wid:WD,feet:feet,ctrls:ctrls,stiff:new Float64Array(NJ).fill(1),tgt:tgt0,age:soft?0:1e9,prevO:new Float64Array(NO),prevO2:new Float64Array(NO),prevW:new Float64Array(NJ),
+    return {parts:bodies,bodies:real,gb:gb,F:F,rc:rc,dir:M,scale:S,wid:WD,feet:feet,ctrls:ctrls,stiff:new Float64Array(NJ).fill(1),tgt:tgt0,age:soft?0:1e9,prevO:new Float64Array(NO),prevO2:new Float64Array(NO),prevW:new Float64Array(NJ),
       lo:-0.10,hi:0.16,noC:0,fc:[false,false],e:0,airT:0,landT:0,fallT:0,rs:new Float64Array(NJ).fill(1),fcT:0,quiet:0,xi:0,st:{ph:0,t:0,leg:0,next:0,hold:[0,0,0],dir:1,xl:0},gu:{ph:-1,t:0,downT:0,tries:0,seq:'prone',from:null},dh:[],dp:new Float64Array([1,0,0,0,0]),wph:0,wph2:0,lph:0,wsg:1,b2ok:false,nz:new Float64Array(10),nr:rngMake(12345),st2:{ph:0,t:0,leg:0,next:0,calm:0,x0:0,xl:0,Ts:0.25,clr:0.09,dir:0},com:{x:0,y:0.95,vx:0,contact:false},hist:[],prev:new Float64Array(NJ)};
   }
 
   // MIRROR: a rig facing -x is built mirrored in the world, and the controller talks to it through these wrappers,
   // which reflect x (positions, velocities, forces) and flip the sign of angles, spins, torques and joint limits.
   // Everything above them (balance, reflexes, get-up, injuries) then works unchanged.
+  // GRAVITY FRAME: the controller also sees the world turned so its gravity points down (-y) and y is the height above
+  // the surface under it (rig.F: a = gravity's angle from straight down, h = height of that surface). With the gyro
+  // tilting gravity it then stands, balances and gets up on whatever is 'down' now (a wall, the roof). F = identity
+  // (normal gravity) changes nothing.
+  function frameBody(b,F){
+    function fv(v){return Vec2(v.x*F.c+v.y*F.s,v.y*F.c-v.x*F.s);}function fp(p){var q=fv(p);q.y-=F.h;return q;}
+    function iv(v){return Vec2(v.x*F.c-v.y*F.s,v.x*F.s+v.y*F.c);}function ip(p){return iv(Vec2(p.x,p.y+F.h));}
+    return {_r:b,
+      getPosition:function(){return fp(b.getPosition());},getWorldCenter:function(){return fp(b.getWorldCenter());},
+      getLinearVelocity:function(){return fv(b.getLinearVelocity());},getAngle:function(){return b.getAngle()-F.a;},
+      getAngularVelocity:function(){return b.getAngularVelocity();},getWorldPoint:function(p){return fp(b.getWorldPoint(p));},
+      getLinearVelocityFromWorldPoint:function(p){return fv(b.getLinearVelocityFromWorldPoint(ip(p)));},getLocalCenter:function(){return b.getLocalCenter();},
+      applyTorque:function(t,w){b.applyTorque(t,w);},applyLinearImpulse:function(J,p,w){b.applyLinearImpulse(iv(J),ip(p),w);},
+      applyForce:function(Fo,p,w){b.applyForce(iv(Fo),ip(p),w);},
+      setLinearVelocity:function(v){b.setLinearVelocity(iv(v));},setAngularVelocity:function(w){b.setAngularVelocity(w);},
+      getMass:function(){return b.getMass();},getInertia:function(){return b.getInertia();},getContactList:function(){return b.getContactList();},
+      getFixtureList:function(){return b.getFixtureList();},getUserData:function(){return b.getUserData();},isDynamic:function(){return b.isDynamic();},
+      getWorld:function(){return b.getWorld();},setAwake:function(f){b.setAwake(f);},getJointList:function(){return b.getJointList();}};
+  }
+  function frameJoint(j,F){
+    function fv(v){return Vec2(v.x*F.c+v.y*F.s,v.y*F.c-v.x*F.s);}function fp(p){var q=fv(p);q.y-=F.h;return q;}
+    return {_r:j,
+      getJointAngle:function(){return j.getJointAngle();},getJointSpeed:function(){return j.getJointSpeed();},
+      setLimits:function(lo,hi){j.setLimits(lo,hi);},getLowerLimit:function(){return j.getLowerLimit();},getUpperLimit:function(){return j.getUpperLimit();},
+      enableLimit:function(f){j.enableLimit(f);},isLimitEnabled:function(){return j.isLimitEnabled();},
+      getReactionForce:function(h){return fv(j.getReactionForce(h));},getAnchorA:function(){return fp(j.getAnchorA());},getAnchorB:function(){return fp(j.getAnchorB());},
+      getBodyA:function(){return j.getBodyA();}};
+  }
   function mv(v){return Vec2(-v.x,v.y);}
   function mirrorBody(b){
-    return {_r:b,
+    return {_r:b._r||b,
       getPosition:function(){return mv(b.getPosition());},getWorldCenter:function(){return mv(b.getWorldCenter());},
       getLinearVelocity:function(){return mv(b.getLinearVelocity());},getAngle:function(){return -b.getAngle();},
       getAngularVelocity:function(){return -b.getAngularVelocity();},getWorldPoint:function(p){return mv(b.getWorldPoint(mv(p)));},
@@ -139,7 +168,7 @@ var RS=(function(){
       getWorld:function(){return b.getWorld();},setAwake:function(f){b.setAwake(f);},getJointList:function(){return b.getJointList();}};
   }
   function mirrorJoint(j){
-    return {_r:j,
+    return {_r:j._r||j,
       getJointAngle:function(){return -j.getJointAngle();},getJointSpeed:function(){return -j.getJointSpeed();},
       setLimits:function(lo,hi){j.setLimits(-hi,-lo);},getLowerLimit:function(){return -j.getUpperLimit();},getUpperLimit:function(){return -j.getLowerLimit();},
       enableLimit:function(f){j.enableLimit(f);},isLimitEnabled:function(){return j.isLimitEnabled();},
@@ -846,7 +875,7 @@ var RS=(function(){
     rig.cowT=0;rig.gu.ph=-1;
   }
   function pullHand(rig,h,w,K,dt){ // impulse the hand toward a world point; the opposite impulse goes into the wounded part
-    var hb=rig.bodies[h],ab=rig.bodies[h-1];if(!hb||!K)return;
+    var hb=rig.gb[h],ab=rig.gb[h-1];if(!hb||!K)return;
     var p=hb.getPosition(),v=hb.getLinearVelocity(),m=hb.getMass()+ab.getMass();
     var vx=Math.max(-3,Math.min(3,(w.x-p.x)*9)),vy=Math.max(-3,Math.min(3,(w.y-p.y)*9));
     var ix=m*(vx-v.x)*0.35,iy=m*(vy-v.y)*0.35;
@@ -856,7 +885,7 @@ var RS=(function(){
   function shotReact(rig,tt,dt){ // runs instead of balance/get-up while it's taking over the legs ('fall', 'hop')
     var S=rig.shot;if(!S)return false;
     S.t+=dt;if(S.t>=S.T||rig.inj&&rig.inj.gone[S.k>=4?S.k-1:Math.min(S.k,2)]&&S.k!==3){if(S.kind==='fall')rig.age=0;rig.shot=null;return false;}
-    var k,ps=rig.bodies,fade=Math.min(1,(S.T-S.t)/0.8);
+    var k,ps=rig.gb,fade=Math.min(1,(S.T-S.t)/0.8);
     if(S.kind==='fall'){
       var down=ps[3].getPosition().y<0.5||ps[1].getPosition().y<0.5,w=Math.min(1,S.t/0.25);
       if(down&&!S.dn){S.dn=S.t;var sg=S.dx<0?-1:1;[0,1,2].forEach(function(q){var v=ps[q].getLinearVelocity();ps[q].setLinearVelocity(Vec2(v.x+1.4*sg,v.y));});} // on its knees: topples over the way the shot pushed it
@@ -886,7 +915,7 @@ var RS=(function(){
   }
   function shotArms(rig,tt,dt){ // after everything else: the hands go to the wound
     var S=rig.shot;if(!S||S.t>=S.T)return;
-    var ps=rig.bodies,K=ps[S.k];if(!K)return;
+    var ps=rig.gb,K=ps[S.k];if(!K)return;
     var w=K.getWorldPoint(Vec2(S.lx,S.ly)),fade=Math.min(1,(S.T-S.t)/0.8)*Math.min(1,0.15+1.2*(rig.blood==null?1:rig.blood)); // weaker as it bleeds out
     if(S.kind==='hand'){
       var far=S.k<10,oh=far?12:6,c=ps[1].getWorldPoint(Vec2(0.09*(rig.dir||1),0.02));
