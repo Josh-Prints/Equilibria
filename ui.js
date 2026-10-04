@@ -13,12 +13,12 @@
     dpr=window.devicePixelRatio||1;W=cv.clientWidth;H=cv.clientHeight;
     cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
   }
-  addEventListener('resize',resize);resize();
+  addEventListener('resize',function(){resize();if(gyro.on)setArena();});resize();
   cam.y=0.2*H/cam.z+0.1;
   function toWorld(sx,sy){return Vec2(cam.x+(sx-W/2)/cam.z,cam.y-(sy-H/2)/cam.z);}
   function toScreen(p){return {x:W/2+(p.x-cam.x)*cam.z,y:H/2-(p.y-cam.y)*cam.z};}
   function setZoom(z,sx,sy){
-    var w=toWorld(sx,sy);cam.z=Math.max(15,Math.min(600,z));
+    var w=toWorld(sx,sy);cam.z=Math.max(gyro.on?fitZoom():15,Math.min(600,z));
     cam.x=w.x-(sx-W/2)/cam.z;cam.y=w.y+(sy-H/2)/cam.z;
   }
 
@@ -194,13 +194,28 @@
   // =====================================================================
   // LIVE WORLD
   // =====================================================================
-  var ARENA=30,ROOF=20; // the arena runs from -30 m to +30 m, walls at each end, roof 20 m up
+  var ARENA=30,ROOF=20,arenaFx=[]; // the arena runs from -30 m to +30 m, walls at each end, roof 20 m up
+  // with the gyro on, the arena is the phone: a box with the screen's shape (its long side 20 m), and zooming all the way
+  // out shows exactly the box, edge to edge
+  function gyroBox(){return W<=H?[10*W/H,20]:[10,20*H/W];}
+  function fitZoom(){return Math.min(W/(2*ARENA),H/ROOF);}
+  function setArena(){
+    var bx=gyro.on?gyroBox():[30,20];if(ground&&bx[0]===ARENA&&bx[1]===ROOF&&arenaFx.length)return;
+    ARENA=bx[0];ROOF=bx[1];if(!ground)return;
+    arenaFx.forEach(function(f){ground.destroyFixture(f);});
+    arenaFx=[ground.createFixture(Box(20,ROOF+40,Vec2(-ARENA-20,ROOF/2),0),{friction:0.9}),ground.createFixture(Box(20,ROOF+40,Vec2(ARENA+20,ROOF/2),0),{friction:0.9}), // walls (as grippy as the floor: with the gyro they can be stood on)
+      ground.createFixture(Box(ARENA+40,20,Vec2(0,ROOF+20),0),{friction:0.9})]; // roof
+    rigs.forEach(function(r){var bs=allParts(r),lo=1e9,hi=-1e9,top=-1e9;bs.forEach(function(b){var q=b.getPosition();lo=Math.min(lo,q.x);hi=Math.max(hi,q.x);top=Math.max(top,q.y);}); // people outside the new box: moved back in
+      var dx=lo<-ARENA+0.3?-ARENA+0.3-lo:hi>ARENA-0.3?ARENA-0.3-hi:0,dy=top>ROOF-0.3?ROOF-0.3-top:0;
+      if(dx||dy)bs.forEach(function(b){var q=b.getPosition();b.setTransform(Vec2(q.x+dx,q.y+dy),b.getAngle());b.setAwake(true);});});
+    stains=stains.filter(function(st){return !st.sd&&Math.abs(st.x)<ARENA;}); // wall and roof splats were on the old walls
+    if(gyro.on){cam.z=fitZoom();cam.x=0;cam.y=ROOF/2;}
+  }
   function init(){
     world=new planck.World({gravity:Vec2(0,-10)});world.on('begin-contact',meleeContact);
     drag=null;group=0;rigs=[];parts=[];stains=[];humanN=0;camT=null;camFollow=null;items=[];fx=[];trig=null;
-    ground=world.createBody();ground.createFixture(Box(ARENA+40,20,Vec2(0,-20),0),{friction:0.9}); // floor (20 m thick so nothing tunnels through it)
-    ground.createFixture(Box(20,ROOF+40,Vec2(-ARENA-20,ROOF/2),0),{friction:0.9});ground.createFixture(Box(20,ROOF+40,Vec2(ARENA+20,ROOF/2),0),{friction:0.9}); // walls (as grippy as the floor: with the gyro they can be stood on)
-    ground.createFixture(Box(ARENA+40,20,Vec2(0,ROOF+20),0),{friction:0.9}); // roof
+    ground=world.createBody();ground.createFixture(Box(70,20,Vec2(0,-20),0),{friction:0.9}); // floor (20 m thick so nothing tunnels through it)
+    arenaFx=[];setArena();
     spawn('stand');
   }
   var liveBufs=[];
@@ -514,7 +529,7 @@
     if(mode==='pinch'&&ids().length>=2){
       var k=ids(),a=ptrs[k[0]],b=ptrs[k[1]];
       var mx=(a.x+b.x)/2,my=(a.y+b.y)/2,d=Math.hypot(a.x-b.x,a.y-b.y)||1;
-      cam.z=Math.max(15,Math.min(600,pinch.z*d/pinch.d));
+      cam.z=Math.max(gyro.on?fitZoom():15,Math.min(600,pinch.z*d/pinch.d));
       cam.x=pinch.w.x-(mx-W/2)/cam.z;cam.y=pinch.w.y+(my-H/2)/cam.z;
     }else if(trig&&trig.id===e.pointerId){aimAt(trig.g,toWorld(p.x,p.y));}
     else if(mode==='drag'&&drag){drag.target=toWorld(p.x,p.y);}
@@ -559,7 +574,8 @@
     var now=performance.now();if(!gyro.tn||now-gyro.tn>250){gyro.tn=now;gyroNote('Gyro working: down is '+Math.round(Math.atan2(gyro.gx,-gyro.gy)*180/Math.PI)+'\u00b0 off the screen\'s bottom. Tilt the phone and things slide or fall that way.');}}
   function gyroNote(t){var d=document.getElementById('gyDesc');if(d&&gyro.on)d.textContent=t;}
   function gyroOn(on){
-    gyro.on=on;if(!on){gyro.sgn=0;gyro.gx=0;gyro.gy=-10;return;}
+    var was=gyro.on;gyro.on=on;if(was!==on)setArena();
+    if(!on){gyro.sgn=0;gyro.gx=0;gyro.gy=-10;return;}
     if(gyro.lis)return;
     var go=function(){if(!gyro.lis){window.addEventListener('devicemotion',gyroMotion);gyro.lis=true;gyro.t0=performance.now();
       setTimeout(function(){if(gyro.on&&!gyro.got)gyroNote('No motion data: this page is running inside a frame that blocks the motion sensor. Open the GitHub Pages version in Safari instead.');},1500);}};
@@ -972,10 +988,10 @@
     if(pat.setTransform)pat.setTransform(new DOMMatrix([k,0,0,k,o.x,o.y]));
     return pat;
   }
-  function drawGround(gy){ // the arena: a 1 m concrete shell (floor, two walls, roof) with nothing outside it
-    var TH=1,a=toScreen(Vec2(-ARENA-TH,ROOF+TH)),b=toScreen(Vec2(ARENA+TH,-TH)),c=toScreen(Vec2(-ARENA,ROOF)),d=toScreen(Vec2(ARENA,0)),ew=Math.max(2,0.03*cam.z);
+  function drawGround(gy){ // the arena: solid concrete everywhere outside it (below the floor, past the walls, above the roof)
+    var c=toScreen(Vec2(-ARENA,ROOF)),d=toScreen(Vec2(ARENA,0)),ew=Math.max(2,0.03*cam.z);
     ctx.save();ctx.imageSmoothingEnabled=false;ctx.fillStyle=worldPat(groundPattern(),64);
-    ctx.beginPath();ctx.rect(a.x,a.y,b.x-a.x,b.y-a.y);ctx.rect(c.x,c.y,d.x-c.x,d.y-c.y);ctx.fill('evenodd'); // shell = outer box minus the inside
+    ctx.beginPath();ctx.rect(-10,-10,W+20,H+20);ctx.rect(c.x,c.y,d.x-c.x,d.y-c.y);ctx.fill('evenodd'); // the whole screen minus the inside
     ctx.fillStyle='#3a3329';ctx.fillRect(c.x,d.y,d.x-c.x,ew);ctx.fillRect(c.x,c.y-ew,d.x-c.x,ew);ctx.fillRect(c.x-ew,c.y,ew,d.y-c.y);ctx.fillRect(d.x,c.y,ew,d.y-c.y); // inner edges
     ctx.strokeStyle='rgba(255,176,32,0.35)';ctx.lineWidth=1;ctx.strokeRect(c.x,c.y,d.x-c.x,d.y-c.y); // thin amber line round the inside
     ctx.fillStyle='#4a0606';
@@ -1191,7 +1207,8 @@
     var dt=Math.min((t-last)/1000,0.05);last=t;
     if(world){var gw=gyro.on&&gyro.lis?Vec2(gyro.gx,gyro.gy):Vec2(0,-10),g0=world.getGravity();if(Math.abs(g0.x-gw.x)+Math.abs(g0.y-gw.y)>1e-3){world.setGravity(gw);world.getBodyList()&&rigs.forEach(function(r){r.bodies.forEach(function(b){b.setAwake(true);});});items.forEach(function(g){g.b.setAwake(true);});}
       var gn2=world.getGravity(),gl=Math.hypot(gn2.x,gn2.y)||1;GX=gn2.x;GY=gn2.y;GDX=GX/gl;GDY=GY/gl;}
-    cam.x=Math.max(-ARENA+1,Math.min(ARENA-1,cam.x));cam.y=Math.max(-1,Math.min(ROOF+1,cam.y)); // camera stays in the arena
+    if(gyro.on){cam.z=Math.max(cam.z,fitZoom());var hw=W/2/cam.z,hh=H/2/cam.z;cam.x=Math.max(-ARENA+hw,Math.min(ARENA-hw,cam.x));cam.y=Math.max(hh,Math.min(ROOF-hh,cam.y));} // gyro: the view never leaves the box
+    else{cam.x=Math.max(-ARENA+1,Math.min(ARENA-1,cam.x));cam.y=Math.max(-1,Math.min(ROOF+1,cam.y));} // camera stays in the arena
     items.forEach(function(g){var q=g.b.getPosition();if(!g.stuck&&(q.y<-0.03||q.y>ROOF||Math.abs(q.x)>ARENA)){g.b.setTransform(Vec2(Math.max(-ARENA+0.3,Math.min(ARENA-0.3,q.x)),0.2),g.b.getAngle());g.b.setLinearVelocity(Vec2(0,0));}}); // anything that got pushed through the floor or a wall pops back out
     var paused=userPaused||training&&pool.mode!=='workers'; // main-thread training: no time left for the live view
     if(!paused){
