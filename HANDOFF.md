@@ -362,3 +362,8 @@ GitHub Actions: Actions tab → `train` → Run workflow (inputs: minutes ≤340
 ## v0.3.1 hotfix 1 — gyro on iPhone
 - The claude.ai artifact viewer runs the page in a frame that iOS won't give motion-sensor access to, so Gyro can't work there. Play on GitHub Pages instead: build_page.py now also writes `index.html`, so with Pages set to deploy from `main` (root) the game is at https://josh-prints.github.io/Equilibria/.
 - iOS asks for motion permission on the next tap after Gyro is switched on (`touchend`/`click` capture), not from the slider. The Gyro description says when access is refused, blocked by the frame, or no data arrives within 1.5 s.
+
+## v0.3.1 hotfix 2 — gyro robustness
+- Gyro gravity now has a fixed strength (at least 10, up to 40 on hard shakes) pointing in the tilt direction, instead of scaling with the measured x/y. Holding the phone flat used to give near-zero gravity, so nothing moved.
+- The sign calibration waits until the tilt reading is above 3, and when the phone is flat the last direction is kept.
+- While Gyro is on, the Gyro description in Settings shows a live readout ("Gyro working: down is N°…"), so it's obvious whether sensor data is arriving.
