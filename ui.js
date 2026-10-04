@@ -549,15 +549,23 @@
   // GYRO: the arena is fixed to the phone, so tilting (or shaking) the phone tilts the room; gravity keeps pointing the
   // real way down, so people and things fall and slide inside it. Uses the accelerometer (gravity included), smoothed.
   var gyro={on:false,lis:false,gx:0,gy:-10,sgn:0};
-  function gyroMotion(e){var a=e.accelerationIncludingGravity;if(!a||a.x==null)return;
+  function gyroMotion(e){var a=e.accelerationIncludingGravity;if(!a||a.x==null)return;gyro.got=1;
     var x=a.x,y=a.y,an=((screen.orientation&&screen.orientation.angle)||window.orientation||0)*Math.PI/180,c=Math.cos(an),s=Math.sin(an),sx=x*c+y*s,sy=-x*s+y*c; // into screen axes
     if(!gyro.sgn)gyro.sgn=sy>0?-1:1; // browsers disagree on the sign: it's held roughly upright when switched on, so down is whichever way y points
     var k=10/9.81,tx=gyro.sgn*sx*k,ty=gyro.sgn*sy*k,m=Math.hypot(tx,ty);if(m>40){tx*=40/m;ty*=40/m;}
     gyro.gx+=(tx-gyro.gx)*0.3;gyro.gy+=(ty-gyro.gy)*0.3;}
-  function gyroOn(on,ask){
-    if(on&&!gyro.lis){var go=function(){if(!gyro.lis){window.addEventListener('devicemotion',gyroMotion);gyro.lis=true;}};
-      if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission==='function'){if(ask)DeviceMotionEvent.requestPermission().then(function(r){if(r==='granted')go();}).catch(function(){});}else go();}
-    gyro.on=on;if(!on){gyro.sgn=0;gyro.gx=0;gyro.gy=-10;}
+  function gyroNote(t){var d=document.getElementById('gyDesc');if(d&&gyro.on)d.textContent=t;}
+  function gyroOn(on){
+    gyro.on=on;if(!on){gyro.sgn=0;gyro.gx=0;gyro.gy=-10;return;}
+    if(gyro.lis)return;
+    var go=function(){if(!gyro.lis){window.addEventListener('devicemotion',gyroMotion);gyro.lis=true;gyro.t0=performance.now();
+      setTimeout(function(){if(gyro.on&&!gyro.got)gyroNote('No motion data: this page is running inside a frame that blocks the motion sensor. Open the GitHub Pages version in Safari instead.');},1500);}};
+    if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission==='function'){ // iPhone: has to be asked from a tap
+      gyroNote('Tap anywhere to allow motion access.');
+      if(!gyro.ask){gyro.ask=function(){document.removeEventListener('touchend',gyro.ask,true);document.removeEventListener('click',gyro.ask,true);var a=gyro.ask;gyro.ask=null;
+        DeviceMotionEvent.requestPermission().then(function(r){if(r==='granted'){go();gyroNote('Tilt or shake the phone: the room tilts with it, and everything inside falls the real way down.');}else gyroNote('Motion access was refused. iPhone: close and reopen the page to be asked again.');}).catch(function(){gyroNote('Motion access is blocked here (the page is inside a frame). Open the GitHub Pages version in Safari.');});};
+        document.addEventListener('touchend',gyro.ask,true);document.addEventListener('click',gyro.ask,true);}
+    }else go();
   }
   function tgl(id){var c=$(id);c.checked=!c.checked;syncMenu();}
   // gore setting: 5 levels, each mapped to a 0-10 strength (0 none, 3 light, 5 bleeding + limbs off, 8 shattering, 10 full)
@@ -583,7 +591,7 @@
   $('bSlowB').onclick=function(){tgl('oSlow');};
   $('mSound').onclick=$('sSound').onclick=function(){tgl('oSound');audioInit();};
   $('mSet').onclick=$('sSet').onclick=function(){$('smenu').hidden=false;};$('sDone').onclick=function(){$('smenu').hidden=true;};
-  $('rCrush').oninput=$('rGore').oninput=$('rReal').oninput=$('rGrab').oninput=$('rGyro').oninput=syncMenu;$('rGyro').onchange=function(){gyroOn(!!+this.value,true);};
+  $('rCrush').oninput=$('rGore').oninput=$('rReal').oninput=$('rGrab').oninput=$('rGyro').oninput=syncMenu;
   $('bClean').onclick=function(){parts=[];stains=[];rigs.forEach(function(r){if(r.bl)r.bl.fill(0);r.dec=[];r.dln=[];r.holeK=null;r.hole=null;r.holes=0;r.heart=null;});pauseMenu(false);};
   $('mMain').onclick=function(){pauseMenu(false);init();var sp=$('splash');sp.hidden=false;sp.style.opacity=1;};
   $('bPlay').onclick=function(){var sp=$('splash');sp.style.transition='opacity .4s';sp.style.opacity=0;setTimeout(function(){sp.hidden=true;},400);audioInit();

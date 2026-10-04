@@ -206,7 +206,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="bReset">Reset scene</button>
   <button id="mMain">Main menu</button>
   </nav>
-  <div class="ver">beta v0.3.1</div>
+  <div class="ver">beta v0.3.1 hotfix 1</div>
 </div>
 
 <div id="smenu" class="ov gm" hidden>
@@ -228,7 +228,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
   <button id="sSound" class="tg">Sound: on</button>
   </nav>
   <p class="tip">drag a body part to throw it &middot; pinch to zoom</p>
-  <div class="ver">beta v0.3.1</div>
+  <div class="ver">beta v0.3.1 hotfix 1</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/planck@1.0.0/dist/planck.min.js"></script>
 <script id="simsrc">
@@ -240,5 +240,5 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;back
 </body>
 </html>
 '''
-open(__import__('os').path.join(__import__('os').path.dirname(__file__),'ragdoll_trainer.html'),'w').write(html)
+for _f in ('ragdoll_trainer.html','index.html'):open(__import__('os').path.join(__import__('os').path.dirname(__file__),_f),'w').write(html) # index.html: what GitHub Pages serves at the site root
 print(len(html))
